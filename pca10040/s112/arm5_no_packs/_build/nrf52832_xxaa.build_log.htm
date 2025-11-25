@@ -1,0 +1,160 @@
+<html>
+<body>
+<pre>
+<h1>µVision Build Log</h1>
+<h2>Tool Versions:</h2>
+IDE-Version: µVision V5.31.0.0
+Copyright (C) 2020 ARM Ltd and ARM Germany GmbH. All rights reserved.
+License Information: ewqw Windows, qewqe, LIC=GMZI6-DF010-QDVKD-8ZM7X-7PG1N-4EZAA
+ 
+Tool Versions:
+Toolchain:       MDK-ARM Plus  Version: 5.31.0.0
+Toolchain Path:  E:\arm\ARM\ARMCC\Bin
+C Compiler:      Armcc.exe V5.06 update 6 (build 750)
+Assembler:       Armasm.exe V5.06 update 6 (build 750)
+Linker/Locator:  ArmLink.exe V5.06 update 6 (build 750)
+Library Manager: ArmAr.exe V5.06 update 6 (build 750)
+Hex Converter:   FromElf.exe V5.06 update 6 (build 750)
+CPU DLL:         
+Dialog DLL:      
+Target DLL:      Segger\JL2CM3.dll V2.99.38.0
+Dialog DLL:      TCM.DLL V1.46.0.0
+ 
+<h2>Project:</h2>
+D:\nRF\nRF5_SDK_17.1.0_ddde560\examples\ble_peripheral\ble_app_uart\pca10040\s112\arm5_no_packs\ble_app_uart_pca10040_s112.uvprojx
+Project File Date:  10/10/2025
+
+<h2>Output:</h2>
+*** Using Compiler 'V5.06 update 6 (build 750)', folder: 'E:\arm\ARM\ARMCC\Bin'
+Build target 'nrf52832_xxaa'
+compiling main.c...
+..\..\..\Max30102.h(137): warning:  #1295-D: Deprecated declaration max30102_reset - give arg types
+  void max30102_reset();
+..\..\..\Max30102.h(138): warning:  #1295-D: Deprecated declaration max30102_turnoff - give arg types
+  void max30102_turnoff();
+..\..\..\Max30102.h(139): warning:  #1295-D: Deprecated declaration max30102_turnon - give arg types
+  void max30102_turnon();
+..\..\..\Max30102.h(140): warning:  #1295-D: Deprecated declaration max30102_clear_fifo - give arg types
+  void max30102_clear_fifo();
+..\..\..\Max30102.h(155): warning:  #1295-D: Deprecated declaration max30102_setup - give arg types
+  void max30102_setup();
+..\..\..\Max30102.h(156): warning:  #1295-D: Deprecated declaration max30102_wakeup - give arg types
+  void max30102_wakeup();
+..\..\..\Max30102.h(164): warning:  #1-D: last line of file ends without a newline
+  #endif
+..\..\..\tmp117_v2.h(47): warning:  #1295-D: Deprecated declaration tmp117_Init - give arg types
+  bool tmp117_Init(); //this function will initialize the sensor using custom parameters
+..\..\..\tmp117_v2.h(48): warning:  #1295-D: Deprecated declaration tmp117_get_Config - give arg types
+  uint16_t tmp117_get_Config(); //this function will return the configuration register value
+..\..\..\tmp117_v2.h(50): warning:  #1295-D: Deprecated declaration tmp117_get_Temp - give arg types
+  float tmp117_get_Temp(); //This function will return the temp in float.
+..\..\..\main.c(67): error:  #20: identifier "NRF_DRV_TWI_INSTANCE_0" is undefined
+  static const nrf_drv_twi_t m_twi = NRF_DRV_TWI_INSTANCE(TWI_INSTANCE_ID);
+..\..\..\main.c(72): warning:  #1295-D: Deprecated declaration hr_spo2_get - give arg types
+  void hr_spo2_get();
+..\..\..\main.c(73): warning:  #1295-D: Deprecated declaration max_init - give arg types
+  void max_init();
+..\..\..\main.c(75): warning:  #1295-D: Deprecated declaration max_data_available - give arg types
+  uint8_t max_data_available();
+..\..\..\main.c(174): warning:  #1295-D: Deprecated declaration health_check - give arg types
+  static void health_check();
+..\..\..\main.c(275): warning:  #177-D: variable "err_code"  was declared but never referenced
+      ret_code_t err_code;
+..\..\..\main.c(541): warning:  #177-D: variable "err_code"  was declared but never referenced
+      uint32_t err_code;
+..\..\..\main.c(1196): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  			if (slope <= 2.5 && slope >= 0.8)
+..\..\..\main.c(1196): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  			if (slope <= 2.5 && slope >= 0.8)
+..\..\..\main.c(1197): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  				slope = (slope - 0.8)/(2.5 - 0.8)* (0.294118-0.241176) + 0.241176;
+..\..\..\main.c(1198): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  			else if (slope < 0.8 && slope >= 0)
+..\..\..\main.c(1199): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  				slope = slope / 0.8 * (0.235294 - 0.182353) + 0.182353;
+..\..\..\main.c(1200): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  			else if (slope > 2.5 && slope <= 10)
+..\..\..\main.c(1201): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  				slope = (slope - 2.5) / (10 - 2.5) * (0.470588 - 0.3) + 0.3;
+..\..\..\main.c(1212): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  			hr_chi = (60*(float)(peak_ir_count-1))/((float)(peak_ir_buffer[peak_ir_count-1] - peak_ir_buffer[0]) * 0.08);
+..\..\..\main.c(1353): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  			if (slope <= 2.5 && slope >= 0.8)
+..\..\..\main.c(1353): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  			if (slope <= 2.5 && slope >= 0.8)
+..\..\..\main.c(1354): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  				slope = (slope - 0.8)/(2.5 - 0.8)* (0.294118-0.241176) + 0.241176;
+..\..\..\main.c(1355): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  			else if (slope < 0.8 && slope >= 0)
+..\..\..\main.c(1356): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  				slope = slope / 0.8 * (0.235294 - 0.182353) + 0.182353;
+..\..\..\main.c(1357): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  			else if (slope > 2.5 && slope <= 10)
+..\..\..\main.c(1358): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  				slope = (slope - 2.5) / (10 - 2.5) * (0.470588 - 0.3) + 0.3;
+..\..\..\main.c(1369): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  			hr_chi = (60*(float)(peak_ir_count-1))/((float)(peak_ir_buffer[peak_ir_count-1] - peak_ir_buffer[0]) * 0.08);
+..\..\..\main.c(1412): warning:  #177-D: variable "un_temp"  was declared but never referenced
+  	uint32_t un_temp = 0;
+..\..\..\main.c(1541): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  	if (slope <= 2.5 && slope >= 0.8)
+..\..\..\main.c(1541): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  	if (slope <= 2.5 && slope >= 0.8)
+..\..\..\main.c(1542): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  		slope = (slope - 0.8)/(2.5 - 0.8)* (0.294118-0.241176) + 0.241176;
+..\..\..\main.c(1543): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  	else if (slope < 0.8 && slope >= 0)
+..\..\..\main.c(1544): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  		slope = slope / 0.8 * (0.235294 - 0.182353) + 0.182353;
+..\..\..\main.c(1545): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  	else if (slope > 2.5 && slope <= 10)
+..\..\..\main.c(1546): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  		slope = (slope - 2.5) / (10 - 2.5) * (0.470588 - 0.3) + 0.3;
+..\..\..\main.c(1555): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  	hr_chi = (60*(float)(peak_ir_count-1))/((float)(peak_ir_buffer[peak_ir_count-1] - peak_ir_buffer[0]) * 0.08);
+..\..\..\main.c(1609): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  		else if (temp >= 36.4 && temp <= 37.6) new_score += 3;
+..\..\..\main.c(1609): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+  		else if (temp >= 36.4 && temp <= 37.6) new_score += 3;
+..\..\..\main.c(1651): warning:  #1-D: last line of file ends without a newline
+   */
+..\..\..\main.c(268): warning:  #177-D: function "application_timers_start"  was declared but never referenced
+  static void application_timers_start(void)
+..\..\..\main.c(749): warning:  #177-D: function "idle_state_handle"  was declared but never referenced
+  static void idle_state_handle(void)
+..\..\..\main.c: 46 warnings, 1 error
+".\_build\nrf52832_xxaa.axf" - 1 Error(s), 46 Warning(s).
+
+<h2>Software Packages used:</h2>
+
+Package Vendor: ARM
+                http://www.keil.com/pack/ARM.CMSIS.5.6.0.pack
+                ARM.CMSIS.5.6.0
+                CMSIS (Cortex Microcontroller Software Interface Standard)
+   * Component: CORE Version: 5.3.0
+
+Package Vendor: NordicSemiconductor
+                http://developer.nordicsemi.com/nRF5_SDK/pieces/nRF_DeviceFamilyPack/NordicSemiconductor.nRF_DeviceFamilyPack.8.40.3.pack
+                NordicSemiconductor.nRF_DeviceFamilyPack.8.40.3
+                Nordic Semiconductor nRF ARM devices Device Family Pack with BSD license.
+   * Component: Startup Version: 8.40.3
+
+<h2>Collection of Component include folders:</h2>
+  .\RTE\_nrf52832_xxaa
+  E:\arm\Pack\ARM\CMSIS\5.6.0\CMSIS\Core\Include
+  E:\arm\Pack\NordicSemiconductor\nRF_DeviceFamilyPack\8.40.3\Device\Include
+
+<h2>Collection of Component Files used:</h2>
+
+   * Component: ARM::CMSIS:CORE:5.3.0
+
+   * Component: NordicSemiconductor::Device:Startup:8.40.3
+      Source file:   Device\Source\arm\arm_startup_nrf52.s
+      Source file:   Device\Source\system_nrf52.c
+      Include file:  Device\Include\system_nrf52.h
+      Include file:  Device\Include\system_nrf.h
+Target not created.
+Build Time Elapsed:  00:00:01
+</pre>
+</body>
+</html>
