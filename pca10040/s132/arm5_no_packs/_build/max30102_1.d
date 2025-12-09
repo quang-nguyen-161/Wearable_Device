@@ -51,6 +51,7 @@
 .\_build\max30102_1.o: ..\..\..\..\..\..\modules\nrfx\hal/nrf_twim.h
 .\_build\max30102_1.o: ..\..\..\..\..\..\modules\nrfx\drivers\include\nrfx_twi.h
 .\_build\max30102_1.o: ..\..\..\..\..\..\modules\nrfx\hal/nrf_twi.h
+.\_build\max30102_1.o: ..\..\..\filter.h
 .\_build\max30102_1.o: ..\..\..\..\..\..\components\libraries\log\nrf_log.h
 .\_build\max30102_1.o: ..\..\..\..\..\..\components\libraries\util\sdk_common.h
 .\_build\max30102_1.o: E:\arm\ARM\ARMCC\Bin\..\include\string.h
@@ -70,3 +71,6 @@
 .\_build\max30102_1.o: ..\..\..\..\..\..\components\libraries\log\nrf_log_default_backends.h
 .\_build\max30102_1.o: ..\..\..\..\..\..\components\libraries\delay\nrf_delay.h
 .\_build\max30102_1.o: ..\..\..\spo2_algorithm.h
+.\_build\max30102_1.o: ..\..\..\..\..\..\integration\nrfx\legacy\nrf_drv_timer.h
+.\_build\max30102_1.o: ..\..\..\..\..\..\modules\nrfx\drivers\include\nrfx_timer.h
+.\_build\max30102_1.o: ..\..\..\..\..\..\modules\nrfx\hal/nrf_timer.h

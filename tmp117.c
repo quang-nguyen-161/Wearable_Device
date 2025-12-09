@@ -13,7 +13,7 @@ extern volatile bool m_xfer_done;   // Reference it (no definition)
 uint8_t tmp117_addr = TMP117_GND_ADDRESS;
 
 // TWI instance
-static const nrf_drv_twi_t m_twi_tmp117 = NRF_DRV_TWI_INSTANCE(0);
+static const nrf_drv_twi_t m_twi_tmp117 = NRF_DRV_TWI_INSTANCE(1);
 
 // Indicates if operation on TWI has ended
 extern volatile bool m_xfer_done;

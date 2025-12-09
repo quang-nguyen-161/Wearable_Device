@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include "nrf_drv_twi.h"
-
+#include "filter.h"
 #define MAX30102_I2C_ADDR 0x57
 #define MAX30102_I2C_TIMEOUT 1000
 #define MAX30102_ADDR_LEN 1
@@ -131,6 +131,10 @@ typedef struct samplestruct
     uint32_t iRed;
 } SAMPLE;
 
+
+
+
+
 void max30102_write(uint8_t register_address, uint8_t value);
 void max30102_read(uint8_t register_address, uint8_t * destination, uint8_t number_of_bytes);
 void max30102_init();
@@ -149,9 +153,10 @@ void max30102_set_a_full(uint8_t enable);
 void max30102_set_die_temp_en(uint8_t enable);
 void max30102_set_die_temp_rdy(uint8_t enable);
 void max30102_plot(uint32_t ir_sample, uint32_t red_sample, uint32_t time);
-void max30102_get_hr_spo2();
+void max30102_get_hr_spo2(uint32_t *HR, uint32_t *SpO2);
 void Max_read_fifo_sample(uint32_t *ir, uint32_t *red);
-void max30102_read_fifo(uint32_t *pun_red_led, uint32_t *pun_ir_led, uint8_t idx);
+void max30102_read_fifo(uint32_t *pun_red_led, uint32_t *pun_ir_led);
+void max30102_sample_push(uint32_t *ir_buff, uint32_t *red_buff, uint16_t size, uint32_t sample_rate);
 void max30102_setup();
 void max30102_wakeup();
 
@@ -161,4 +166,25 @@ uint32_t Max_get_ir_signal(void);
 void Max_next_sample(void);
 uint16_t Max_check_available_data(void);
 
+uint32_t SpO2_count(uint32_t *ir_buff, uint32_t *red_buff, uint32_t size, uint16_t head);
+uint32_t HR_count(uint32_t *ir_buff, uint32_t size, uint32_t freq, uint16_t head);
+void filter_buff(uint32_t *buff, uint32_t *filtered_buff, uint32_t size);
+void ring_buffer_push(uint32_t *buff, uint32_t value, uint32_t size, uint32_t *head);
+bool find_peak(uint32_t *buff, uint32_t size, uint32_t head);
+void peak_time_push(uint32_t *buff,
+                    uint32_t *delta_t_buff,
+                    uint32_t size,
+                    uint32_t head,
+                    uint32_t *dt_head,
+										uint32_t delta_size);
+uint32_t hr_count(uint32_t *delta_t_buff,
+                  uint32_t delta_size,
+                  uint32_t peak,
+                 uint32_t dt_head);
+uint32_t spo2_count(uint32_t *ir_buff,
+                      uint32_t *red_buff,
+                      uint32_t size,
+                      uint32_t head);
+void timer2_init(void);
+ uint32_t timer2_now(void);
 #endif

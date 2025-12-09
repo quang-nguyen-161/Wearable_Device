@@ -10,7 +10,40 @@
 #include "nrf_delay.h"
 #include "spo2_algorithm.h"
 
-#define TWI_INSTANCE_ID	0
+#include "nrf_drv_timer.h"
+
+extern const nrf_drv_timer_t TIMER2 = NRF_DRV_TIMER_INSTANCE(2);
+
+void timer2_handler(nrf_timer_event_t event_type, void * p_context)
+{
+    // not used
+}
+
+void timer2_init(void)
+{
+    uint32_t err;
+
+    nrf_drv_timer_config_t config = NRF_DRV_TIMER_DEFAULT_CONFIG;
+
+    config.frequency = NRF_TIMER_FREQ_1MHz;   // 1 tick = 1 microsecond
+    config.bit_width = NRF_TIMER_BIT_WIDTH_32;
+
+    err = nrf_drv_timer_init(&TIMER2, &config, timer2_handler);
+    APP_ERROR_CHECK(err);
+
+    nrf_drv_timer_enable(&TIMER2);
+}
+
+ uint32_t timer2_now(void)
+{
+	
+    nrf_drv_timer_capture(&TIMER2, NRF_TIMER_CC_CHANNEL0);
+    return nrf_drv_timer_capture_get(&TIMER2, NRF_TIMER_CC_CHANNEL0);
+}
+
+
+
+#define TWI_INSTANCE_ID	1
 const nrf_drv_twi_t m_twi = NRF_DRV_TWI_INSTANCE(TWI_INSTANCE_ID);
 extern volatile bool m_xfer_done; 
 max30102_t max30102;
@@ -666,7 +699,7 @@ void max30102_init()
 	max30102_set_fifo_config(max30102_smp_ave_1, 0, 17);
 	max30102_set_mode(max30102_spo2);
 	max30102_set_adc_resolution(max30102_adc_2048);
-	max30102_set_sampling_rate(max30102_sr_50);
+	max30102_set_sampling_rate(max30102_sr_100);
 	max30102_set_led_pulse_width(max30102_pw_18_bit);
 	max30102_set_led_current_1(2);
 	max30102_set_led_current_2(2);
@@ -674,12 +707,10 @@ void max30102_init()
 	NRF_LOG_INFO("max ok");
 	NRF_LOG_FLUSH();
 }
-void max30102_read_fifo(uint32_t *pun_red_led, uint32_t *pun_ir_led, uint8_t idx)
+void max30102_read_fifo(uint32_t *pun_red_led, uint32_t *pun_ir_led)
 {
-	uint32_t un_temp = 0;
 	uint8_t uch_temp;
-	*pun_ir_led = 0;
-	*pun_red_led = 0;
+	
 	uint8_t sample[6];
 
 	max30102_read(MAX30102_INTERRUPT_STATUS_1, &uch_temp, 1);
@@ -689,134 +720,159 @@ void max30102_read_fifo(uint32_t *pun_red_led, uint32_t *pun_ir_led, uint8_t idx
 	uint32_t ir_sample = ((uint32_t)(sample[0] << 16) | (uint32_t)(sample[1] << 8) | (uint32_t)(sample[2])) & 0x3ffff;
 	uint32_t red_sample = ((uint32_t)(sample[3] << 16) | (uint32_t)(sample[4] << 8) | (uint32_t)(sample[5])) & 0x3ffff;
 	
-	pun_ir_led[idx] = ir_sample;
-	pun_red_led[idx] = red_sample;
+	*pun_ir_led = ir_sample;
+	*pun_red_led = red_sample;
 }
-void max30102_get_hr_spo2()
+
+void ring_buffer_push(uint32_t *buff, uint32_t value, uint32_t size, uint32_t *head)
 {
-	uint32_t peak_ir_buffer[100]={0};
-uint8_t peak_ir_count, min_ir_count, peak_red_count, min_red_count;
-float slope = 0;
-float AC_ir, DC_ir, AC_red, DC_red;
-	typedef struct
+    buff[*head] = value;
+    *head = (*head + 1) % size;   // move write pointer
+}
+
+// return buff[idx] with ring wrap
+static inline uint32_t rb_get(uint32_t *buff, uint32_t size, int32_t idx)
 {
-	float x;
-	float y;
-} point_t;
+    if (idx < 0)      idx += size;
+    if (idx >= size)  idx -= size;
+    return buff[idx];
+}
 
-point_t IR[100] = {0};
-point_t RED[100] = {0};
-uint8_t ir_peak, red_peak;
+bool find_peak(uint32_t *buff, uint32_t size, uint32_t head)
+{
+    // head = next write position
+    // last written sample = head - 1
+    int32_t curr_idx = (head + size - 1) % size;
 
-uint32_t count = 0;
-uint32_t aun_ir_buffer[100]; //infrared LED sensor data
-uint32_t aun_red_buffer[100];  //red LED sensor data
+    uint32_t curr  = buff[curr_idx];
+    uint32_t prev1 = rb_get(buff, size, curr_idx - 1);
+    uint32_t prev2 = rb_get(buff, size, curr_idx - 2);
+    uint32_t prev3 = rb_get(buff, size, curr_idx - 3);
+		uint32_t prev4 = rb_get(buff, size, curr_idx - 4);
+		uint32_t prev5 = rb_get(buff, size, curr_idx - 5);
+    uint32_t next1 = rb_get(buff, size, curr_idx + 1);
+    uint32_t next2 = rb_get(buff, size, curr_idx + 2);
+    uint32_t next3 = rb_get(buff, size, curr_idx + 3);
+		uint32_t next4 = rb_get(buff, size, curr_idx + 4);
+		uint32_t next5 = rb_get(buff, size, curr_idx + 5);
+    // simple peak condition
+    if ( curr > prev1 &&
+         curr > prev2 &&
+         curr > prev3 &&
+				 curr > prev4 &&
+				 curr > prev5 &&
+         curr > next1 &&
+         curr > next2 &&
+         curr > next3 &&
+				 curr > next4 &&
+         curr > next5 )
+    {
+        return true;
+    }
 
-	max30102_turnon();
-			AC_ir = 0; DC_ir = 0; DC_red = 0; AC_red = 0;
-			peak_ir_count = 0; min_ir_count = 0; peak_red_count = 0; min_red_count = 0;
+    return false;
+}
 
-			ir_peak = 0;
-			red_peak = 0;
-			
-
-			for (int i = 0; i < 99; i++)
-			{
-				aun_ir_buffer[i] = aun_ir_buffer[i+1];
-				aun_red_buffer[i] = aun_red_buffer[i+1];
-			}
-
-			//while(nrf_gpio_pin_read(MAX_INT_PIN) == 1);
-                        nrf_delay_ms(20);
-			max30102_read_fifo(aun_ir_buffer, aun_red_buffer, 99); 
-			for (int i = 0; i < 100; i++)
-			{
-				peak_ir_buffer[i] = 0;
-				RED[i].x = 0; 
-				RED[i].y = 0;
-				IR[i].x = 0;
-				IR[i].y = 0;
-			}
+void peak_time_push(uint32_t *buff,
+                    uint32_t *delta_t_buff,
+                    uint32_t size,
+                    uint32_t head,
+                    uint32_t *dt_head,
+										uint32_t delta_size)
+{
 	
-			for (int i = 3; i < 97; i++)
-			{
-				if (aun_ir_buffer[i] > aun_ir_buffer[i+1] &&
-					aun_ir_buffer[i] > aun_ir_buffer[i+2] &&
-					aun_ir_buffer[i] > aun_ir_buffer[i+3] &&
-					aun_ir_buffer[i] > aun_ir_buffer[i-1] &&
-					aun_ir_buffer[i] > aun_ir_buffer[i-2] &&
-					aun_ir_buffer[i] > aun_ir_buffer[i-3] )
-				{
-					peak_ir_buffer[peak_ir_count] = i;
-					peak_ir_count++;
-
-					IR[ir_peak].x = i;
-					IR[ir_peak].y = aun_ir_buffer[i];
-					ir_peak++;
-				}
-		
-				else if (aun_ir_buffer[i] < aun_ir_buffer[i+1] &&
-					aun_ir_buffer[i] < aun_ir_buffer[i+2] &&
-					aun_ir_buffer[i] < aun_ir_buffer[i+3] &&
-					aun_ir_buffer[i] < aun_ir_buffer[i-1] &&
-					aun_ir_buffer[i] < aun_ir_buffer[i-2] &&
-					aun_ir_buffer[i] < aun_ir_buffer[i-3] ) 
-				{
-					min_ir_count++;
-
-					IR[ir_peak].x = i;
-					IR[ir_peak].y = aun_ir_buffer[i];
-					ir_peak++;
-				}
-		
-				if (aun_red_buffer[i] > aun_red_buffer[i+1] &&
-					aun_red_buffer[i] > aun_red_buffer[i+2] &&
-					aun_red_buffer[i] > aun_red_buffer[i+3] &&
-					aun_red_buffer[i] > aun_red_buffer[i-1] &&
-					aun_red_buffer[i] > aun_red_buffer[i-2] &&
-					aun_red_buffer[i] > aun_red_buffer[i-3] )
-				{
-					RED[red_peak].x = i;
-					RED[red_peak].y = aun_red_buffer[i];
-					red_peak++;
-				}
-		
-				else if (aun_red_buffer[i] < aun_red_buffer[i+1] &&
-					aun_red_buffer[i] < aun_red_buffer[i+2] &&
-					aun_red_buffer[i] < aun_red_buffer[i+3] &&
-					aun_red_buffer[i] < aun_red_buffer[i-1] &&
-					aun_red_buffer[i] < aun_red_buffer[i-2] &&
-					aun_red_buffer[i] < aun_red_buffer[i-3] )
-				{
-					RED[red_peak].x = i;
-					RED[red_peak].y = aun_red_buffer[i];
-					red_peak++;
-				}
-			}
+    static uint32_t last_peak_time = 0;
+		uint32_t now = (timer2_now()/1000);
 	
-			int i = 2; int idx = 0; float m;
+    uint32_t peak_idx = (head + size - 5 - 1) % size;
 
-			while (i < ir_peak - 1 && i < red_peak - 1)
-			{
-				if (IR[i].y < IR[i+1].y && IR[i+1].y > IR[i+2].y && RED[i].y < RED[i+1].y && RED[i+1].y > RED[i+2].y)
-				{
-					m = (IR[i+2].y - IR[i].y) / (IR[i+2].x - IR[i].x);
-					DC_ir = m * (IR[i+1].x - IR[i].x) + IR[i].y;
-					AC_ir = IR[i+1].y - DC_ir;
-			
-					m = (RED[i+2].y - RED[i].y) / (RED[i+2].x - RED[i].x);
-					DC_red = m * (RED[i+1].x - RED[i].x) + RED[i].y;
-					AC_red = RED[i+1].y - DC_red;
-			
-					slope = (AC_red/DC_red) / (AC_ir/DC_ir);
-			
-					idx++;
-				}
-		
-				i++;
-			}
-		
-			if (slope <= 2.5 && slope >= 0.8)
+    if (find_peak(buff, size, peak_idx))
+    {
+        uint32_t now = (timer2_now()/1000);
+
+        if (last_peak_time != 0)
+        {
+            uint32_t dt = now - last_peak_time;
+
+            if (dt > 0)
+            {
+                delta_t_buff[*dt_head] = dt;
+						
+                *dt_head = (*dt_head + 1) % delta_size;
+            }
+        }
+
+        last_peak_time = now;
+    }
+}
+
+
+uint32_t hr_count(uint32_t *delta_t_buff,
+                  uint32_t delta_size,
+                  uint32_t peak,
+                  uint32_t dt_head)
+{
+    if (peak < 2) return 0;     // need 2 peaks ? 1 interval
+
+    uint32_t intervals = peak - 1;
+    if (intervals > delta_size) intervals = delta_size;
+
+    uint32_t total_dt = 0;
+
+    // read newest dt first (at idx-1)
+    for (uint32_t i = 0; i < intervals; i++)
+    {
+        int32_t pos = (int32_t)dt_head - 1 - i;
+        if (pos < 0) pos += delta_size;
+
+        total_dt += delta_t_buff[pos];
+    }
+
+    float bpm = (60.0f * 1e3f * intervals) / (float)total_dt;
+			NRF_LOG_INFO("bpm: %d",(uint32_t) bpm);
+			NRF_LOG_FLUSH();
+    return (uint32_t)bpm;
+}
+
+uint32_t spo2_count(uint32_t *ir_buff,
+                      uint32_t *red_buff,
+                      uint32_t size,
+                      uint32_t head)
+{
+    uint32_t idx = (head + 1) % size;
+
+    uint32_t ir_min = 0xFFFFFFFF, ir_max = 0;
+    uint32_t red_min = 0xFFFFFFFF, red_max = 0;
+    uint64_t ir_sum = 0, red_sum = 0;
+
+    for (int i = 0; i < size; i++)
+    {
+        uint32_t ir  = ir_buff[idx];
+        uint32_t red = red_buff[idx];
+
+        ir_sum  += ir;
+        red_sum += red;
+
+        if (ir > ir_max)   ir_max = ir;
+        if (ir < ir_min)   ir_min = ir;
+        if (red > red_max) red_max = red;
+        if (red < red_min) red_min = red;
+
+        idx++;
+        if (idx >= size) idx = 0;
+    }
+
+    float ir_dc  = (float)ir_sum  / size;
+    float red_dc = (float)red_sum / size;
+
+    float ir_ac  = (float)(ir_max  - ir_min);
+    float red_ac = (float)(red_max - red_min);
+
+    if (ir_ac <= 0 || red_ac <= 0 || ir_dc <= 0 || red_dc <= 0)
+        return 0;
+
+    float slope = (red_ac / red_dc) / (ir_ac / ir_dc);
+		if (slope <= 2.5 && slope >= 0.8)
 				slope = (slope - 0.8)/(2.5 - 0.8)* (0.294118-0.241176) + 0.241176;
 			else if (slope < 0.8 && slope >= 0)
 				slope = slope / 0.8 * (0.235294 - 0.182353) + 0.182353;
@@ -825,23 +881,24 @@ uint32_t aun_red_buffer[100];  //red LED sensor data
 			else if (slope > 10)
 				slope = 0.529;
 			else slope = 0.24;
-			int spo2_chi;
-			int hr_chi;
-			spo2_chi = 104 - 17 * slope;
-		
-			if (spo2_chi > 100) spo2_chi = 99;
-		
-		//	temp = tmp117_get_Temp() + TEMP_OFFSET;
+    // Mapping formula
+    float spo2 = 104.0f - 17.0f * slope;
 
-			hr_chi = (60*(float)(peak_ir_count-1))/((float)(peak_ir_buffer[peak_ir_count-1] - peak_ir_buffer[0]) * 0.02);
+    if (spo2 > 100) spo2 = 100;
+    if (spo2 < 70)  spo2 = 70;
 		
-			if (aun_ir_buffer[99] < 15000) 
-			{
-				spo2_chi = 0;
-				hr_chi = 0;
-			}
-			NRF_LOG_INFO("IR, %d , RED , %d , hr , %d , spo2 , %d ,",aun_ir_buffer[99],aun_red_buffer[99],hr_chi,spo2_chi);
-           
+		NRF_LOG_INFO("spo2: %d",spo2);
 		NRF_LOG_FLUSH();
+    return (uint32_t)spo2;
 }
+
+
+
+
+
+
+
+
+
+
 

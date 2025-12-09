@@ -4,7 +4,6 @@
 .\_build\mma845.o: ..\..\..\..\..\..\modules\nrfx\nrfx.h
 .\_build\mma845.o: ..\..\..\..\..\..\integration\nrfx\nrfx_config.h
 .\_build\mma845.o: ..\config\sdk_config.h
-.\_build\mma845.o: ..\config\app_config.h
 .\_build\mma845.o: ..\..\..\..\..\..\modules\nrfx\drivers/nrfx_common.h
 .\_build\mma845.o: E:\arm\ARM\ARMCC\Bin\..\include\stdint.h
 .\_build\mma845.o: E:\arm\ARM\ARMCC\Bin\..\include\stddef.h

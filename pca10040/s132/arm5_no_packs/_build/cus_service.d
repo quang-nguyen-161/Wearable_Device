@@ -4,7 +4,6 @@
 .\_build\cus_service.o: E:\arm\ARM\ARMCC\Bin\..\include\stdbool.h
 .\_build\cus_service.o: E:\arm\ARM\ARMCC\Bin\..\include\string.h
 .\_build\cus_service.o: ..\config\sdk_config.h
-.\_build\cus_service.o: ..\config\app_config.h
 .\_build\cus_service.o: ..\..\..\..\..\..\components\libraries\util\nordic_common.h
 .\_build\cus_service.o: E:\arm\Pack\NordicSemiconductor\nRF_DeviceFamilyPack\8.40.3\Device\Include\compiler_abstraction.h
 .\_build\cus_service.o: ..\..\..\..\..\..\components\libraries\util\sdk_os.h
