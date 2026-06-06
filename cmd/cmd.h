@@ -10,12 +10,12 @@ extern "C" {
 
 /* -----------------------------------------------------------------------
  * Wire command bytes (gateway -> node).
+ * conn_handle on the central identifies the target — no node_id byte needed.
  * ----------------------------------------------------------------------- */
-#define CMD_ACK       0xA0  /* [CMD][addr_b2..b5][node_id]                         6 B  */
-#define CMD_ECG_CFG   0xCF  /* [CMD][node_id][freq_lo][freq_hi][int_lo][int_hi]      6 B  */
-#define CMD_THR       0xCE  /* [CMD][node_id][ppg×6][ecg×6][spo2×6][temp×12]       32 B  */
-#define CMD_PPG_CFG   0xCD  /* [CMD][node_id][freqLo][freqHi][redMa][irMa]           6 B  */
-#define CMD_VITAL_CFG 0xCC  /* [CMD][node_id][intervalLo][intervalHi]                4 B  */
+#define CMD_ECG_CFG   0xCF  /* [CMD][freq_lo][freq_hi][int_lo][int_hi]               5 B  */
+#define CMD_THR       0xCE  /* [CMD][ppg×6][ecg×6][spo2×6][temp×12]               31 B  */
+#define CMD_PPG_CFG   0xCD  /* [CMD][freqLo][freqHi][redMa][irMa]                   5 B  */
+#define CMD_VITAL_CFG 0xCC  /* [CMD][intervalLo][intervalHi]                         3 B  */
 
 /* -----------------------------------------------------------------------
  * ECG reconfiguration  (CMD_ECG_CFG)
@@ -37,11 +37,6 @@ extern volatile uint8_t  g_ppg_ir_ma;        /* mA  — default 6    */
  * ----------------------------------------------------------------------- */
 extern volatile bool     g_vital_cfg_pending;
 extern volatile uint16_t g_vital_interval_ms; /* ms  — default 1000 */
-
-/* -----------------------------------------------------------------------
- * Node identity.  0xFF = not yet assigned via CMD_ACK.
- * ----------------------------------------------------------------------- */
-extern volatile uint8_t  g_node_id;
 
 /* -----------------------------------------------------------------------
  * Vital thresholds — 3 tiers per vital sign.

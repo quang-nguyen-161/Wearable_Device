@@ -8,9 +8,9 @@
 #include "nrf_log_default_backends.h"
 
 #include "nrf_delay.h"
-#include "spo2_algorithm.h"
-
 #include "nrf_drv_timer.h"
+
+/* algorithm_by_RF removed — PPG HR/SpO2 computed in max30102_cal() */
 
 extern const nrf_drv_timer_t TIMER2 = NRF_DRV_TIMER_INSTANCE(2);
 
@@ -44,8 +44,7 @@ void timer2_init(void)
 
 
 #define TWI_INSTANCE_ID	1
-extern  nrf_drv_twi_t m_twi = NRF_DRV_TWI_INSTANCE(TWI_INSTANCE_ID);
-extern volatile bool m_xfer_done; 
+/* m_twi and m_xfer_done declared via main.h (included through max.h) */
 
 
 max30102_t max30102;
@@ -60,62 +59,46 @@ uint64_t lastBeat = 0; //Time at which the last beat occurred
 float beatsPerMinute;
 int beatAvg;
 
-uint32_t irBuffer[100]; //infrared LED sensor data
-uint32_t redBuffer[100];  //red LED sensor data
-int32_t bufferLength = 100; //data length
-int32_t Spo2; //SPO2 value
-int8_t validSPO2; //indicator to show if the SPO2 calculation is valid
-int32_t heartRate; //heart rate value
-int8_t validHeartRate; //indicator to show if the heart rate calculation is valid
-
-uint8_t cnt = 0;
 
 void max30102_write(uint8_t register_address, uint8_t value)
 {
     ret_code_t err_code;
     uint8_t tx_buff[MAX30102_ADDR_LEN+1];
-	
-    //Write the register address and data into transmit buffer
+
     tx_buff[0] = register_address;
     tx_buff[1] = value;
 
-    //Set the flag to false to show the transmission is not yet completed
     m_xfer_done = false;
-    
-    //Transmit the data over TWI Bus
     err_code = nrf_drv_twi_tx(&m_twi, MAX30102_I2C_ADDR, tx_buff, MAX30102_ADDR_LEN + 1, false);
-	APP_ERROR_CHECK(err_code);
-    
-    //Wait until the transmission of the data is finished
-    while (m_xfer_done == false);
+    if (err_code != NRF_SUCCESS)
+    {
+        NRF_LOG_WARNING("MAX30102 write 0x%02x failed: %u", register_address, err_code);
+        return;
+    }
+    TWI_WAIT();
 }
 
 void max30102_read(uint8_t register_address, uint8_t * destination, uint8_t number_of_bytes)
 {
     ret_code_t err_code;
 
-    //Set the flag to false to show the receiving is not yet completed
     m_xfer_done = false;
-    
-    // Send the Register address where we want to write the data
     err_code = nrf_drv_twi_tx(&m_twi, MAX30102_I2C_ADDR, &register_address, 1, true);
-	APP_ERROR_CHECK(err_code);
-	  
-    //Wait for the transmission to get completed
-    while (m_xfer_done == false){}
+    if (err_code != NRF_SUCCESS)
+    {
+        NRF_LOG_WARNING("MAX30102 read addr 0x%02x failed: %u", register_address, err_code);
+        return;
+    }
+    TWI_WAIT();
 
-    //set the flag again so that we can read data from the MPU6050's internal register
     m_xfer_done = false;
-	  
-    // Receive the data from the MPU6050
     err_code = nrf_drv_twi_rx(&m_twi, MAX30102_I2C_ADDR, destination, number_of_bytes);
-	APP_ERROR_CHECK(err_code);
-		
-    //wait until the transmission is completed
-    while (m_xfer_done == false)
-	{
-		
-	}
+    if (err_code != NRF_SUCCESS)
+    {
+        NRF_LOG_WARNING("MAX30102 rx failed: %u", err_code);
+        return;
+    }
+    TWI_WAIT();
 }
 
 void max30102_reset()
@@ -237,18 +220,6 @@ void max30102_plot(uint32_t ir_sample, uint32_t red_sample, uint32_t time)
 	NRF_LOG_FLUSH();
 }
 
-uint32_t sum = 0;
-
-void avg_buffer()
-{
-	sum = 0;
-	for (uint8_t i = 0; i < 100; i++)
-	{
-		sum += irBuffer[i];
-	}
-	sum /= 100;
-}
-
 float heart_rate;
 
 uint32_t read_count = 0;
@@ -352,45 +323,6 @@ void max30102_read_fifo(max30102_t *obj)
     }
 }
 */
-void max30102_read_1st_fifo(max30102_t *obj)
-{
-    // First transaction: Get the FIFO_WR_PTR
-    uint8_t wr_ptr = 0, rd_ptr = 0;
-    max30102_read(MAX30102_FIFO_WR_PTR, &wr_ptr, 1);
-    max30102_read(MAX30102_FIFO_RD_PTR, &rd_ptr, 1);
-
-    int8_t num_samples;
-
-    num_samples = (int8_t)wr_ptr - (int8_t)rd_ptr;
-    if (num_samples < 1)
-    {
-        num_samples += 32;
-    }
-
-    // Second transaction: Read NUM_SAMPLES_TO_READ samples from the FIFO
-    for (int8_t i = 0; i < num_samples; i++)
-    {
-        uint8_t sample[6];
-        max30102_read(MAX30102_FIFO_DATA, sample, 6);
-        uint32_t ir_sample = ((uint32_t)(sample[0] << 16) | (uint32_t)(sample[1] << 8) | (uint32_t)(sample[2])) & 0x3ffff;
-        uint32_t red_sample = ((uint32_t)(sample[3] << 16) | (uint32_t)(sample[4] << 8) | (uint32_t)(sample[5])) & 0x3ffff;
-        obj->_ir_samples[i] = ir_sample;
-        obj->_red_samples[i] = red_sample;
-        //max30102_plot(ir_sample, red_sample);
-
-        if (cnt < 100)
-        {
-            irBuffer[cnt] = ir_sample;
-            redBuffer[cnt] = red_sample;
-            cnt++;
-        }
-    }
-
-    if (cnt >= 100)
-    {
-    	maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer,(float*) &Spo2, &validSPO2, &heartRate, &validHeartRate);
-    }
-}
 
 void Max_read_fifo_sample(uint32_t *ir, uint32_t *red)
 {
@@ -500,7 +432,7 @@ void max30102_setup()
 	max30102_set_fifo_config(max30102_smp_ave_4, 1, 17);
 	max30102_set_led_pulse_width(max30102_pw_18_bit);
 	max30102_set_adc_resolution(max30102_adc_4096);
-	max30102_set_sampling_rate(max30102_sr_400);
+	max30102_set_sampling_rate(max30102_sr_400); /* 400 ADC sps / 4x avg = 100 FIFO sps = FS=100 */
 	
 	max30102_set_led_current_1(6.2);
 	max30102_set_led_current_2(6.2);
@@ -674,6 +606,9 @@ void max30102_cal()
         last_iRed = sampleBuffTemp[i].iRed;
         eachBeatSampleCount++;
     }
+
+    g_sensor.hr_ppg = HR;
+    g_sensor.spo2   = SPO2;
 }
 
 uint8_t max30102_getHeartRate() { return HR; }

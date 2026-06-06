@@ -25,13 +25,16 @@ static char const * fds_evt_str[] =
     "FDS_EVT_GC",
 };
 
-/* Dummy configuration data. */
+/* Default configuration data written on first boot. */
 static configuration_t m_dummy_cfg =
 {
     .config1_on  = false,
     .config2_on  = true,
     .boot_count  = 0x0,
-    .device_name = "dummy",
+    .device_name = "ECG_dev",
+    .last_mode   = 0,       /* MODE_CONTINUOUS */
+    .period_ms_lo = 10000,  /* 10 s default periodic interval (low word) */
+    .period_ms_hi = 0,
 };
 
 /* A record containing dummy configuration data. */

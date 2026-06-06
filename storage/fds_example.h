@@ -61,13 +61,18 @@
 #define NRF_LOG_GREEN(...)  NRF_LOG_INFO(COLOR_GREEN  __VA_ARGS__)
 
 
-/* A dummy structure to save in flash. */
+/* Device configuration stored in flash. */
 typedef struct
 {
-    uint32_t boot_count;
-    char     device_name[16];
-    bool     config1_on;
+    uint32_t boot_count;        /* incremented on every power-up                */
+    char     device_name[16];   /* BLE advertised name (null-terminated)        */
+    bool     config1_on;        /* legacy fields — keep for backwards compat    */
     bool     config2_on;
+    uint8_t  last_mode;         /* device_mode_t: 0=CONTINUOUS,1=PERIODIC,2=ECG */
+    uint8_t  _pad0;             /* explicit padding — keeps struct 4-byte aligned */
+    uint16_t period_ms_lo;      /* periodic mode interval low word (ms)         */
+    uint16_t period_ms_hi;      /* periodic mode interval high word (ms)        */
+    uint8_t  _pad1[2];          /* padding                                      */
 } configuration_t;
 
 

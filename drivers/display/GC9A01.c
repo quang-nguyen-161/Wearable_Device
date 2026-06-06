@@ -1,5 +1,5 @@
 #include "gc9a01.h"
-
+#include "main.h"       /* m_m_lcd_spi */
 
 #include "nrf_gpio.h"
 #include "nrf_delay.h"
@@ -20,9 +20,9 @@
 #define CS_OFF              nrf_gpio_pin_clear(LCD_CS_Pin)
 
 
-#define SPI_INSTANCE 0                                                   // SPI instance index.
-static const nrf_drv_spi_t lcd_spi = NRF_DRV_SPI_INSTANCE(SPI_INSTANCE); // SPI instance.
-static uint8_t m_tx_buf[3];                                              // TX buffer.
+#define SPI_INSTANCE 0
+/* m_m_lcd_spi defined in main.c, declared extern in main.h */
+static uint8_t m_tx_buf[3];
 
 
 /***** Structures *******************************************************************/
@@ -61,14 +61,14 @@ void GC9A01_write_continue(uint8_t *data, size_t len) {
 /************************************************************************************/
 
 /***** Hardware and soft func *******************************************************/
-void lcd_spi_init(void) {
+void m_lcd_spi_init(void) {
 
     nrf_drv_spi_config_t spi_config = NRF_DRV_SPI_DEFAULT_CONFIG;
     spi_config.miso_pin = NRF_DRV_SPI_PIN_NOT_USED;
     spi_config.mosi_pin = LCD_MOSI_PIN;
     spi_config.sck_pin = LCD_SCK_PIN;
     spi_config.frequency = NRF_DRV_SPI_FREQ_8M;
-    APP_ERROR_CHECK(nrf_drv_spi_init(&lcd_spi, &spi_config, NULL, NULL));
+    APP_ERROR_CHECK(nrf_drv_spi_init(&m_lcd_spi, &spi_config, NULL, NULL));
 
     /* GPIO for display */
     nrf_gpio_cfg_output(LCD_RES_Pin);
@@ -79,7 +79,7 @@ void lcd_spi_init(void) {
 }
 
 void GC9A01_spi_tx(uint8_t *data, size_t len) {
-    nrf_drv_spi_transfer(&lcd_spi, data, len, 0, 0);
+    nrf_drv_spi_transfer(&m_lcd_spi, data, len, 0, 0);
 }
 
 void GC9A01_init(void) {

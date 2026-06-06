@@ -1,9 +1,10 @@
 #ifndef      _TMP117_V2_H_
-#define      _TMP117_V2_H_	
+#define      _TMP117_V2_H_
 
 #include "stdio.h"
 #include "stdint.h"
 #include "stdbool.h"
+#include "main.h"           /* m_twi, m_xfer_done */
 
 #define     TMP117_GND_ADDRESS 0x48		//	GND
 #define     TMP117_VCC_ADDRESS 0x49    //	VCC
@@ -38,6 +39,8 @@ typedef enum
 	AVE64
 } TMP117_AVE;    //Averaging mode No Average, Average 8,32,64
 
+/* tmp117_poll() writes g_sensor.temp — see main.h for sensor_data_t */
+
 uint16_t tmp117_read_register(uint8_t reg);
 void tmp117_write_register(uint16_t reg, uint8_t value1, uint8_t value2);
 void tmp117_set_Config(uint8_t first,uint8_t second); //this function will set the configuration register
@@ -50,5 +53,6 @@ void tmp117_set_Averaging(TMP117_AVE ave); //set the high and low limit register
 float tmp117_get_temp(); //This function will return the temp in float.
 void tmp117_shutdown_mode(void);
 void tmp117_continuous_mode(void);
+void tmp117_poll(void);         /* reads temperature and updates g_temp; call from sensor tick */
 
 #endif

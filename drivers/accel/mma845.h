@@ -2,11 +2,23 @@
 #define MMA8452_H
 
 #include "nrf_delay.h"
-#include "nrf_drv_twi.h"
+#include "nrf_gpio.h"
+#include "main.h"           /* m_twi, m_xfer_done */
+#include "nrf_drv_gpiote.h"
 
 #include <stdbool.h>
 #include <stdint.h>
 #include "math.h"
+
+/* Sentinel for "pin not wired" — matches nRF HAL convention */
+#ifndef NRF_GPIO_PIN_NOT_CONNECTED
+#define NRF_GPIO_PIN_NOT_CONNECTED  0xFF
+#endif
+
+/* MMA8452Q INT1 pin — set to your schematic's INT1 GPIO. */
+#ifndef MMA8452Q_INT1_PIN
+#define MMA8452Q_INT1_PIN  27   /* P0.27 — change to match your schematic */
+#endif
 
 ///////////////////////////////////
 // MMA8452Q Register Definitions //
@@ -56,6 +68,18 @@ typedef enum
     OFF_Y = 0x30,
     OFF_Z = 0x31
 } MMA8452Q_Register;
+
+/* ── Result struct (updated after each MMA8452Q_read() call) ── */
+typedef struct {
+    float    ax, ay, az;       /* acceleration in g's                    */
+    float    magnitude;        /* sqrt(ax²+ay²+az²) in m/s²              */
+    float    ac;               /* AC component (gravity removed)          */
+    bool     fall_detected;    /* set on MMA8452Q freefall interrupt      */
+    bool     new_data;         /* cleared by consumer                     */
+    uint32_t timestamp_ms;
+} accel_result_t;
+
+extern accel_result_t g_accel;
 
 ////////////////////////////////
 // MMA8452Q Misc Declarations //
@@ -130,4 +154,9 @@ float read_accelerator(void);
 void set_current_accelerator(float current_acc);
 float get_current_accelerator(void);
 uint32_t MMA8452Q_get_i2c_error_count(void);
+
+/* Configure GPIOTE interrupt on INT1 pin for freefall detection.
+ * Call once after MMA8452Q_init(). No-op if MMA8452Q_INT1_PIN is not connected. */
+void mma8452q_alert_init(void);
+
 #endif

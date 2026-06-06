@@ -5,9 +5,36 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
-extern nrf_drv_twi_t m_twi;
+/* m_twi and m_xfer_done declared via main.h (included through mma845.h) */
 uint8_t m_deviceAddress = 0x1C;
-extern volatile uint8_t m_xfer_done;
+accel_result_t g_accel = {0};
+
+static volatile bool s_fall_fired = false;
+
+static void fall_handler(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
+{
+    (void)pin; (void)action;
+    s_fall_fired = true;
+}
+
+/* Configure FF_MT freefall detection and route interrupt to INT1 */
+static void mma8452q_setup_freefall(void)
+{
+    /* Freefall on X+Y+Z, latch enabled, OAE=0 (freefall) */
+    MMA8452Q_writeRegister(FF_MT_CFG, 0xB8);
+    /* Threshold: 3 × 0.063g ≈ 0.19g (at 2g full-scale) */
+    MMA8452Q_writeRegister(FF_MT_THS, 0x03);
+    /* Debounce: 6 × 10ms = 60ms at ODR_100 */
+    MMA8452Q_writeRegister(FF_MT_COUNT, 0x06);
+    /* Enable FF_MT interrupt (bit 2) in CTRL_REG4 */
+    uint8_t reg4 = 0;
+    MMA8452Q_readRegister(CTRL_REG4, &reg4);
+    MMA8452Q_writeRegister(CTRL_REG4, reg4 | 0x04);
+    /* Route FF_MT to INT1 (bit 2) in CTRL_REG5 */
+    uint8_t reg5 = 0;
+    MMA8452Q_readRegister(CTRL_REG5, &reg5);
+    MMA8452Q_writeRegister(CTRL_REG5, reg5 | 0x04);
+}
 MMA8452Q_Scale m_scale;
 static int16_t x, y, z;
 static float cx, cy, cz;
@@ -41,6 +68,8 @@ bool MMA8452Q_init(uint8_t deviceAddress, MMA8452Q_Scale fsr, MMA8452Q_ODR odr)
 
     // Multiply parameter by 0.0625g to calculate threshold.
     MMA8452Q_setupTap(0x80, 0x80, 0x08); // Disable x, y, set z to 0.5g
+
+    mma8452q_setup_freefall(); // Configure freefall detection + INT1 routing
 
     MMA8452Q_setActive(); // Set to active to start reading
     return true;
@@ -121,7 +150,22 @@ void MMA8452Q_read()
     cx = (float)x / (float)(1 << 11) * (float)(m_scale);
     cy = (float)y / (float)(1 << 11) * (float)(m_scale);
     cz = (float)z / (float)(1 << 11) * (float)(m_scale);
-	
+
+    g_accel.ax        = cx;
+    g_accel.ay        = cy;
+    g_accel.az        = cz;
+    g_accel.magnitude = sqrtf(cx*cx + cy*cy + cz*cz) * 9.80665f;  /* m/s² */
+    g_accel.new_data  = true;
+
+    if (s_fall_fired)
+    {
+        s_fall_fired = false;
+        uint8_t src = 0;
+        MMA8452Q_readRegister(FF_MT_SRC, &src);  /* read clears the latch */
+        g_accel.fall_detected = true;
+        NRF_LOG_INFO("Fall detected! FF_MT_SRC=0x%02x", src);
+        NRF_LOG_FLUSH();
+    }
 }
 
 // CHECK IF NEW DATA IS AVAILABLE
@@ -361,7 +405,7 @@ bool MMA8452Q_writeRegister(uint8_t reg, uint8_t data)
     if (err_code != NRF_SUCCESS)
         return false;
 
-    while (!m_xfer_done);
+    TWI_WAIT();
 
     return true;
 }
@@ -382,7 +426,7 @@ bool MMA8452Q_readRegister(uint8_t reg, uint8_t *dest)
     if (err_code != NRF_SUCCESS)
         return false;
 
-    while (!m_xfer_done);
+    TWI_WAIT();
 
     m_xfer_done = false;
 
@@ -393,7 +437,7 @@ bool MMA8452Q_readRegister(uint8_t reg, uint8_t *dest)
     if (err_code != NRF_SUCCESS)
         return false;
 
-    while (!m_xfer_done);
+    TWI_WAIT();
 
     return true;
 }
@@ -415,7 +459,7 @@ bool MMA8452Q_readRegisters(uint8_t reg, uint8_t *buffer, uint8_t len)
     if (err_code != NRF_SUCCESS)
         return false;
 
-    while (!m_xfer_done);
+    TWI_WAIT();
 
     m_xfer_done = false;
 
@@ -426,7 +470,7 @@ bool MMA8452Q_readRegisters(uint8_t reg, uint8_t *buffer, uint8_t len)
     if (err_code != NRF_SUCCESS)
         return false;
 
-    while (!m_xfer_done);
+    TWI_WAIT();
 
     return true;
 }
@@ -461,4 +505,20 @@ float get_current_accelerator(void){
 
 uint32_t MMA8452Q_get_i2c_error_count(void) {
     return s_i2c_error_count;
+}
+
+void mma8452q_alert_init(void)
+{
+    if (MMA8452Q_INT1_PIN == NRF_GPIO_PIN_NOT_CONNECTED) { return; }
+
+    if (!nrf_drv_gpiote_is_init())
+    {
+        APP_ERROR_CHECK(nrf_drv_gpiote_init());
+    }
+
+    /* INT1 is active-low — detect falling edge */
+    nrf_drv_gpiote_in_config_t cfg = GPIOTE_CONFIG_IN_SENSE_HITOLO(true);
+    cfg.pull = NRF_GPIO_PIN_PULLUP;
+    APP_ERROR_CHECK(nrf_drv_gpiote_in_init(MMA8452Q_INT1_PIN, &cfg, fall_handler));
+    nrf_drv_gpiote_in_event_enable(MMA8452Q_INT1_PIN, true);
 }

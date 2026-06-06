@@ -8,50 +8,49 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
-extern volatile bool m_xfer_done;   // Reference it (no definition)
-
+/* m_twi and m_xfer_done from main.h via tmp117.h */
 uint8_t tmp117_addr = TMP117_GND_ADDRESS;
-
-// TWI instance
-static const nrf_drv_twi_t m_twi_tmp117 = NRF_DRV_TWI_INSTANCE(1);
-
-// Indicates if operation on TWI has ended
-extern volatile bool m_xfer_done;
 
 uint16_t tmp117_read_register(uint8_t reg)
 {
-    uint16_t value = 0;
     uint8_t buffer[2] = {0};
     ret_code_t err_code;
 
     m_xfer_done = false;
-    err_code = nrf_drv_twi_tx(&m_twi_tmp117, tmp117_addr, &reg, sizeof(reg), false);
-    APP_ERROR_CHECK(err_code);
-
-    while (!m_xfer_done);
+    err_code = nrf_drv_twi_tx(&m_twi, tmp117_addr, &reg, sizeof(reg), false);
+    if (err_code != NRF_SUCCESS)
+    {
+        NRF_LOG_WARNING("TMP117 read reg 0x%02x failed: %u", reg, err_code);
+        return 0;
+    }
+    TWI_WAIT();
 
     m_xfer_done = false;
-		
-    err_code = nrf_drv_twi_rx(&m_twi_tmp117, tmp117_addr, buffer, 2);
-    APP_ERROR_CHECK(err_code);
+    err_code = nrf_drv_twi_rx(&m_twi, tmp117_addr, buffer, 2);
+    if (err_code != NRF_SUCCESS)
+    {
+        NRF_LOG_WARNING("TMP117 rx failed: %u", err_code);
+        return 0;
+    }
+    TWI_WAIT();
 
-    while (!m_xfer_done);
-
-
-    value = ((buffer[0] << 8) | buffer[1]);
-    return value;
+    return (uint16_t)((buffer[0] << 8) | buffer[1]);
 }
 
 void tmp117_write_register(uint16_t reg, uint8_t value1, uint8_t value2)
 {
-  ret_code_t err_code;
-  static uint8_t buffer[3];
-  buffer[0] = reg;
-  buffer[1] = value1;
-  buffer[2] = value2;
-  err_code = nrf_drv_twi_tx(&m_twi_tmp117, tmp117_addr, buffer, sizeof(buffer), false);
-  APP_ERROR_CHECK(err_code);
-  nrf_delay_ms(1);
+    ret_code_t err_code;
+    static uint8_t buffer[3];
+    buffer[0] = (uint8_t)reg;
+    buffer[1] = value1;
+    buffer[2] = value2;
+    err_code = nrf_drv_twi_tx(&m_twi, tmp117_addr, buffer, sizeof(buffer), false);
+    if (err_code != NRF_SUCCESS)
+    {
+        NRF_LOG_WARNING("TMP117 write reg 0x%02x failed: %u", reg, err_code);
+        return;
+    }
+    nrf_delay_ms(1);
 }
 
 void tmp117_set_Config(uint8_t first,uint8_t second) //this function will set the configuration register
@@ -66,8 +65,8 @@ void tmp117_set_Temp_Offset(uint8_t first, uint8_t second) //this function will 
       //buf[0]=MyTMP117_Temp_Offset;
       //buf[1]=first;     
       //buf[2]=second;    
-      ////err_code = nrf_drv_twi_tx(&m_twi_tmp117, MyTMP117_DeviceID, buf, 2, false);
-      //err_code = nrf_drv_twi_tx(&m_twi_tmp117, MyTMP117_DeviceID, buf, sizeof(buf), false);
+      ////err_code = nrf_drv_twi_tx(&m_twi, MyTMP117_DeviceID, buf, 2, false);
+      //err_code = nrf_drv_twi_tx(&m_twi, MyTMP117_DeviceID, buf, sizeof(buf), false);
       //APP_ERROR_CHECK(err_code);
       //nrf_delay_ms(1);
       tmp117_write_register(TMP117_TEMP_OFFSET,first,second);
@@ -144,4 +143,9 @@ float tmp117_get_temp()
 {
       float Temp = TMP117_RESOLUTION * tmp117_read_register(TMP117_TEMP_REG);
       return Temp;
+}
+
+void tmp117_poll(void)
+{
+    g_sensor.temp = tmp117_get_temp();
 }

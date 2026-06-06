@@ -38,17 +38,34 @@ static void on_write(ble_cus_t * p_cus, ble_evt_t const * p_ble_evt)
     }		
 }
 
+static void on_read(ble_cus_t * p_cus, ble_evt_t const * p_ble_evt)
+{
+	ble_cus_evt_t                 evt;
+	ble_gatts_evt_read_t const * p_evt_read = &p_ble_evt->evt.gatts_evt.params.authorize_request.request.read;
+	if ((p_evt_read->handle == p_cus->tx_handles.value_handle) &&
+							 (p_cus->data_handler != NULL))	
+	{
+        evt.type                  = BLE_CUS_EVT_READ;
+				evt.conn_handle = p_ble_evt->evt.gatts_evt.conn_handle;
+        p_cus->data_handler(&evt);		
+	}
+}
+
 void ble_cus_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context)
 {
-    ble_cus_t * p_cus = (ble_cus_t *)p_context;
+		ble_cus_t * p_cus = (ble_cus_t *)p_context;
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GATTS_EVT_WRITE:
             on_write(p_cus, p_ble_evt);
             break;
+				
+				case BLE_GATTS_EVT_RW_AUTHORIZE_REQUEST:
+						on_read(p_cus, p_ble_evt);
         default:
+            // No implementation needed.
             break;
-    }
+    }	
 }
 
 uint32_t ble_cus_init(ble_cus_t * p_cus, ble_cus_init_t const * p_cus_init)
@@ -78,24 +95,30 @@ uint32_t ble_cus_init(ble_cus_t * p_cus, ble_cus_init_t const * p_cus_init)
     /**@snippet [Adding proprietary Service to the SoftDevice] */
     VERIFY_SUCCESS(err_code);
 	
-    /* RX characteristic (0x1402): central writes commands here — write-only, no CCCD */
+    // Add the RX Characteristic.
     memset(&add_char_params, 0, sizeof(add_char_params));
-    add_char_params.uuid          = BLE_UUID_NUS_RX_CHARACTERISTIC;
-    add_char_params.uuid_type     = p_cus->uuid_type;
-    add_char_params.max_len       = BLE_NUS_MAX_RX_CHAR_LEN;
-    add_char_params.init_len      = sizeof(uint8_t);
-    add_char_params.is_var_len    = true;
-    add_char_params.char_props.write_wo_resp = 1;
-    add_char_params.char_props.write         = 1;
-    add_char_params.write_access  = SEC_OPEN;
-
+    add_char_params.uuid                     = BLE_UUID_NUS_RX_CHARACTERISTIC;
+    add_char_params.uuid_type                = p_cus->uuid_type;
+    add_char_params.max_len                  = BLE_NUS_MAX_RX_CHAR_LEN;
+    add_char_params.init_len                 = sizeof(uint8_t);
+    add_char_params.is_var_len               = true;
+    add_char_params.char_props.notify = 1;
+		add_char_params.char_props.read 	= 1;
+		add_char_params.is_defered_read 	= 1;		// need for read
+		add_char_params.char_props.write 	= 1;
+		
+    add_char_params.cccd_write_access = SEC_OPEN;
+		add_char_params.read_access       = SEC_OPEN;
+		add_char_params.write_access      = SEC_OPEN;	
+		
     err_code = characteristic_add(p_cus->service_handle, &add_char_params, &p_cus->rx_handles);
     if (err_code != NRF_SUCCESS)
     {
         return err_code;
-    }
-
-    /* TX characteristic (0x1401): node sends ECG here via notify — notify-only, needs CCCD */
+    }	
+	
+    // Add the TX Characteristic.
+    /**@snippet [Adding proprietary characteristic to the SoftDevice] */
     memset(&add_char_params, 0, sizeof(add_char_params));
     add_char_params.uuid              = BLE_UUID_NUS_TX_CHARACTERISTIC;
     add_char_params.uuid_type         = p_cus->uuid_type;
@@ -103,9 +126,15 @@ uint32_t ble_cus_init(ble_cus_t * p_cus, ble_cus_init_t const * p_cus_init)
     add_char_params.init_len          = sizeof(uint8_t);
     add_char_params.is_var_len        = true;
     add_char_params.char_props.notify = 1;
-    add_char_params.cccd_write_access = SEC_OPEN;
+		add_char_params.char_props.read 	= 1;
+		add_char_params.is_defered_read 	= 1;		// need for read
+		add_char_params.char_props.write 	= 1;
 
-    return characteristic_add(p_cus->service_handle, &add_char_params, &p_cus->tx_handles);
+    add_char_params.cccd_write_access = SEC_OPEN;
+		add_char_params.read_access       = SEC_OPEN;
+		add_char_params.write_access      = SEC_OPEN;		
+	
+		return characteristic_add(p_cus->service_handle, &add_char_params, &p_cus->tx_handles);
 }
 
 uint32_t ble_cus_data_send(ble_cus_t * p_cus,

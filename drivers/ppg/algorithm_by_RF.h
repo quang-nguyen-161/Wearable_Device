@@ -44,12 +44,11 @@
  * and/or sample length would require these paramteres to be adjusted.
  */
 #define ST 4      // Sampling time in s. WARNING: if you change ST, then you MUST recalcuate the sum_X2 parameter below!
-#define FS 25     // Sampling frequency in Hz. WARNING: if you change FS, then you MUST recalcuate the sum_X2 parameter below!
-// Sum of squares of ST*FS numbers from -mean_X (see below) to +mean_X incremented be one. For example, given ST=4 and FS=25,
-// the sum consists of 100 terms: (-49.5)^2 + (-48.5)^2 + (-47.5)^2 + ... + (47.5)^2 + (48.5)^2 + (49.5)^2
-// The sum is symmetrc, so you can evaluate it by multiplying its positive half by 2. It is precalcuated here for enhanced 
-// performance.
-const float sum_X2 = 83325; // WARNING: you MUST recalculate this sum if you changed either ST or FS above!
+#define FS 100    // Sampling frequency in Hz. WARNING: if you change FS, then you MUST recalcuate the sum_X2 parameter below!
+// Sum of squares of ST*FS numbers from -mean_X (see below) to +mean_X incremented be one. For ST=4 and FS=100,
+// the sum consists of 400 terms: (-199.5)^2 + (-198.5)^2 + ... + (198.5)^2 + (199.5)^2
+// Calculated as 2 * sum_{k=0}^{199}(k+0.5)^2 = 2*(2646700+19900+50) = 5333300
+const float sum_X2 = 5333300; // WARNING: you MUST recalculate this sum if you changed either ST or FS above!
 // WARNING: The two parameters below are CRUCIAL! Proper HR evaluation depends on these.
 #define MAX_HR 180  // Maximal heart rate. To eliminate erroneous signals, calculated HR should never be greater than this number.
 #define MIN_HR 40   // Minimal heart rate. To eliminate erroneous signals, calculated HR should never be lower than this number.

@@ -149,7 +149,7 @@ ret_code_t m_record_init()
 
         /* Write the updated record to flash. */
         rc = fds_record_update(&desc, &m_dummy_record);
-        if ((rc != NRF_SUCCESS) && (rc == FDS_ERR_NO_SPACE_IN_FLASH))
+        if (rc == FDS_ERR_NO_SPACE_IN_FLASH)
         {
             NRF_LOG_INFO("No space in flash, delete some records to update the config file.");
         }
@@ -164,7 +164,7 @@ ret_code_t m_record_init()
         NRF_LOG_INFO("Writing config file...");
 
         rc = fds_record_write(&desc, &m_dummy_record);
-        if ((rc != NRF_SUCCESS) && (rc == FDS_ERR_NO_SPACE_IN_FLASH))
+        if (rc == FDS_ERR_NO_SPACE_IN_FLASH)
         {
             NRF_LOG_INFO("No space in flash, delete some records to update the config file.");
         }
@@ -190,16 +190,16 @@ ret_code_t m_record_write(uint32_t fid, uint32_t key, uint8_t * data, uint32_t l
 	
 	rc = fds_record_write(NULL, &record);
 	
-        if ((rc != NRF_SUCCESS) && (rc == FDS_ERR_NO_SPACE_IN_FLASH))
+        if (rc == FDS_ERR_NO_SPACE_IN_FLASH)
         {
             NRF_LOG_INFO("No space in flash, delete some records to update the config file.");
         }
         else
         {
-						NRF_LOG_INFO("write success");
             APP_ERROR_CHECK(rc);
+            NRF_LOG_INFO("write success");
         }
-				return rc;
+        return rc;
 }
 
 ret_code_t m_record_update(uint32_t fid, uint32_t key, uint8_t * data, uint32_t len)
@@ -221,25 +221,25 @@ ret_code_t m_record_update(uint32_t fid, uint32_t key, uint8_t * data, uint32_t 
 
     if (rc == NRF_SUCCESS)
     {
-        /* A config file is in flash. Let's update it. */
-        fds_flash_record_t config = {0};
-
-   
-        /* Write the updated record to flash. */
         rc = fds_record_update(&desc, &record);
-				
-        if ((rc != NRF_SUCCESS) && (rc == FDS_ERR_NO_SPACE_IN_FLASH))
+        if (rc == FDS_ERR_NO_SPACE_IN_FLASH)
         {
             NRF_LOG_INFO("No space in flash, delete some records to update the config file.");
         }
-			}
+        else if (rc != NRF_SUCCESS)
+        {
+            APP_ERROR_CHECK(rc);
+        }
         else
         {
-						
-            APP_ERROR_CHECK(rc);
-						NRF_LOG_INFO("update success");
+            NRF_LOG_INFO("update success");
         }
-				return rc;
+    }
+    else
+    {
+        NRF_LOG_WARNING("m_record_update: record not found (0x%08X)", rc);
+    }
+    return rc;
 }
 
 ret_code_t m_record_gc()
@@ -260,6 +260,7 @@ ret_code_t m_record_delete(uint32_t fid, uint32_t key)
 	{
 		rc = fds_record_delete(&desc);
 	}
+	return rc;
 }
 
 ret_code_t m_record_read(uint32_t fid, uint32_t key, uint8_t * data, uint32_t *len)
