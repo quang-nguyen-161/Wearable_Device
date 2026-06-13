@@ -25,9 +25,11 @@ Streams ECG waveform + vitals over BLE to an ESP32 gateway, which publishes to T
 | Timer | Owner |
 |-------|-------|
 | TIMER0 | SoftDevice (reserved) |
-| TIMER1 | PWM (reserved; `pwm_init()` stub in peripheral.c) |
+| TIMER1 | unused / reserved |
 | TIMER2 | `timer2_now()` µs counter (peripheral.c) |
 | TIMER3 | SAADC PPI 250 Hz ECG (peripheral.c) — **never reassign** |
+
+LCD backlight PWM uses the dedicated **PWM0** hardware peripheral (`pwm_init()` / `lcd_set_brightness()` in peripheral.c) — it does not consume a TIMER, so TIMER1 remains free.
 
 ---
 
@@ -36,11 +38,12 @@ Streams ECG waveform + vitals over BLE to an ESP32 gateway, which publishes to T
 | Path | Purpose |
 |------|---------|
 | `main.c / main.h` | Top-level init, main loop, vitals BLE send; main.h holds the **board pin map** (per-target `NRF52840_XXAA`/nRF52832 macros) + `sensor_data_t` |
-| `peripheral/peripheral.c/.h` | **All on-chip peripheral init/callbacks/instances**: TWI1 (`twi_init`/`twi_wait`/`m_twi`), SPI0 (`spi_init`/`m_lcd_spi`), SAADC+PPI+TIMER3 (`adc_init`/`adc_set_sample_us`/`saadc_callback`/`g_ecg_raw`/`g_ecg_ready`), TIMER2 (`timer2_init`/`timer2_now`), PWM stub (`pwm_init`) |
-| `ecg/ecg.c` | ECG DSP pipeline + R-peak v1+v2 (calls `adc_init()` from peripheral.c) |
+| `peripheral/peripheral.c/.h` | **All on-chip peripheral init/callbacks/instances**: TWI1 (`twi_init`/`twi_wait`/`m_twi`), SPI0 (`spi_init`/`m_lcd_spi`, 8 MHz), SAADC+PPI+TIMER3 (`adc_init`/`adc_set_sample_us`/`saadc_callback`/`g_ecg_raw`/`g_ecg_ready`), TIMER2 (`timer2_init`/`timer2_now`), PWM0 LCD backlight (`pwm_init`/`lcd_set_brightness`) |
+| `ecg/ecg.c` | ECG DSP pipeline + R-peak v1+v2 (calls `adc_init()` from peripheral.c); `hr_ecg_valid` gated by `g_ecg_stream_enabled` |
 | `ecg/ecg.h` | `ecg_init()`, `ecg_process()`, ECG result struct |
-| `cmd/cmd.c` | Gateway RX command parser — CMD_ECG_CFG / CMD_THR / CMD_PPG_CFG / CMD_VITAL_CFG |
-| `cmd/cmd.h` | Command codes 0xCF/CE/CD/CC, all volatile config globals |
+| `cmd/cmd.c` | Gateway RX command parser — CMD_ECG_CFG / CMD_THR / CMD_PPG_CFG / CMD_VITAL_CFG / CMD_NAME_CFG |
+| `cmd/cmd.h` | Command codes 0xCF/CE/CD/CC/C9, all volatile config globals |
+| `ble/ble_app.c/h` | GAP/connection handling, advertising; `ble_app_get_addr()` (own BLE address) and `ble_app_get_rssi()` (latest RSSI via `BLE_GAP_EVT_RSSI_CHANGED`, RSSI reporting started on connect) |
 | `ble/cus_service.c/h` | Custom GATT service — TX notify 0x1401, RX write 0x1402 |
 | `app/device_mode.c/h` | Operating mode FSM (CONTINUOUS/PERIODIC/ECG), FDS persistence, `g_sensor_tick` |
 | `dsp/filter.c/h` | Biquad DF2T, NLMS ALE, Savitzky-Golay, bilinear coeff calculators |
@@ -49,7 +52,7 @@ Streams ECG waveform + vitals over BLE to an ESP32 gateway, which publishes to T
 | `drivers/accel/mma845.c/h` | MMA8452Q I2C driver |
 | `drivers/accel/pedometer.c/h` | Dynamic-threshold step counter, cadence EMA |
 | `drivers/display/GC9A01.c/h` | GC9A01 LCD driver (SPI0 bus via `spi_init()` in peripheral.c; LCD GPIO + draw ops here) |
-| `drivers/display/dashboard.c/h` | 4-row UI layout: BLE status / Temp+SpO2 / ECG+HR / Steps |
+| `drivers/display/dashboard.c/h` | 4-row UI layout V3: Row1 BLE status + battery icon / Row2 Temp+SpO2 / Row3 Steps+HR / Row4 ECG + ON/OFF badge. See [LCD_DASHBOARD.md](LCD_DASHBOARD.md) |
 | `drivers/temp/tmp117_v2.c/h` | TMP117 I2C driver (one-shot mode, 200 ms conversion) |
 | `drivers/temp/temp_filter.c/h` | median(3) + rate-limit + EMA(α=0.3) temperature smoother |
 | `storage/flash_user.c/h` | FDS-based persistent config (device mode, period) |
@@ -61,13 +64,16 @@ Streams ECG waveform + vitals over BLE to an ESP32 gateway, which publishes to T
 ```
 TIMER3 CC0 → PPI → SAADC AIN0   (no CPU — fires every 4 ms)
   ISR: g_ecg_raw = sample; g_ecg_ready = true
-  main loop calls ecg_process(g_ecg_raw):
+  main loop: if g_ecg_raw < 1000 → electrode disconnected, skip filter chain,
+             set g_sensor.hr_ecg_valid = false (no buffer/HR update this sample)
+  else call ecg_process(g_ecg_raw):
     4th-order notch @ 50 Hz   (2× biquad_df2t_t, Q=10)
     4th-order bandpass 1–25 Hz (2× HP biquad + 2× LP biquad, Butterworth)
     ALE-NLMS                   (32 taps, delay=15)
     Savitzky-Golay             (window=11)
     R-peak v1: Pan-Tompkins adaptive threshold
     R-peak v2: derivative² + adaptive envelope + median(8) RR → g_sensor.hr_ecg
+               (only updates hr_ecg/hr_ecg_valid when g_ecg_stream_enabled)
   → s_ecg_buf[]  (ECG_BUF_SAMPLES=500 max)
   → BLE notify when s_ecg_idx >= g_cmd_pkt_samples (default 50, 100 bytes)
 ```
@@ -82,6 +88,7 @@ TIMER3 CC0 → PPI → SAADC AIN0   (no CPU — fires every 4 ms)
 - RX (0x1402): gateway → node — config commands (see cmd.h)
 - Advertising: 40 ms interval, 180 s duration, auto-restart on idle
 - Connection: 8 ms interval (fixed), MTU 247 bytes negotiated
+- RSSI: `sd_ble_gap_rssi_start()` is called on connect; `BLE_GAP_EVT_RSSI_CHANGED` updates the cached value read by `ble_app_get_rssi()`. Own address via `ble_app_get_addr()` (`sd_ble_gap_addr_get`). Both feed the LCD Row 1 status (signal bars + address fallback).
 
 ---
 
@@ -96,6 +103,15 @@ Pending flags are checked at the start of every sensor tick and applied immediat
 | CMD_THR | 0xCE | 31 | — | threshold globals updated immediately, no pending |
 | CMD_PPG_CFG | 0xCD | 5 | `g_ppg_cfg_pending` | `max30102_set_sampling_rate()` + `set_led_current_1/2()` in main loop |
 | CMD_VITAL_CFG | 0xCC | 3 | `g_vital_cfg_pending` | vital BLE tick counter uses `g_vital_interval_ms / 10` directly |
+| CMD_NAME_CFG | 0xC9 | 2-17 | — | `g_patient_name` updated immediately; shown on LCD Row 1 line 2 when connected |
+
+Every successful command above also calls `notify_update(title, val)`, setting
+`g_cmd_update_pending` + `g_cmd_update_msg` (title, e.g. "ECG Config") + `g_cmd_update_val`
+(the actual new value(s), e.g. "250Hz 200ms", "PPG ECG SpO2 Temp" for CMD_THR — only the
+threshold groups that actually changed, "Continuous ECG:On" for CMD_MODE_CFG, the name itself
+for CMD_NAME_CFG). The main loop sensor tick checks this flag and, if an LCD is present, shows
+a ~1s full-screen bold splash (title + value, `dashboard_show_update_splash()`) before
+restoring the normal layout (`dashboard_init_layout()`).
 
 **Wire flow in main.c sensor tick:**
 ```c
@@ -114,14 +130,19 @@ if (g_vital_cfg_pending)    { g_vital_cfg_pending = false; }  /* interval read l
 while (1) {
   [sensor tick — every 10 ms]
     ① apply pending config (cmd pending flags)
-    ② MAX30102: read 1 sample → max30102_process() → g_sensor.hr_ppg / spo2
+    ② MAX30102: read 1 sample → max30102_process() → g_sensor.hr_ppg / spo2 (+ s_dash.hr_valid=true → dashboard_update_hr())
     ③ MMA8452Q: read → pedometer_update() → g_sensor.steps / cadence
-    ④ LCD: dashboard_update_steps/ecg()
+    ④ LCD: s_dash.ecg_enabled = g_ecg_stream_enabled; dashboard_update_steps() / dashboard_update_ecg()
     ⑤ TMP117: one-shot state machine (wake → 200 ms → read → filter) → g_sensor.temp
     ⑥ BLE vitals: send every g_vital_interval_ms (default 1000 ms)
+    ⑦ LCD vitals refresh — every g_vital_interval_ms:
+         dashboard_update_hr()/dashboard_update_temp() from g_sensor (shows "--" if not *_valid)
+         Row 1: s_dash.ble_connected/rssi/mac from ble_app_*(); device_name from g_patient_name
+                (CMD_NAME_CFG) if connected else "" → dashboard_update_ble_status()
 
   [ECG path — every 4 ms, ISR-driven]
-    ecg_process(g_ecg_raw) → filter chain → R-peak → buffer
+    if g_ecg_raw < 1000 → electrode disconnected: hr_ecg_valid=false, skip filter/buffer
+    else ecg_process(g_ecg_raw) → filter chain → R-peak → buffer
     → BLE notify when buffer reaches g_cmd_pkt_samples
 
   [idle]
