@@ -1,0 +1,30 @@
+# nRF5 SDK build artefacts
+_build
+.hex
+.bin
+.elf
+.map
+.d
+.o
+.a
+.lst
+.axf
+.crf
+
+# Keil MDK
+.uvguix.
+.scvd
+JLinkLog.txt
+JLinkSettings.ini
+
+# IAR
+Debug
+Release
+
+# SES (SEGGER Embedded Studio)
+Output
+.emSession
+
+# Loggedplotted data
+.csv
+.png
