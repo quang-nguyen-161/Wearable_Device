@@ -5,7 +5,6 @@ void ppi_init(NRF_TIMER_Type *p_timer, NRF_SAADC_Type *p_saadc)
     //wire event end-point as timer compare & task end-point as saadc sample
     NRF_PPI->CH[0].EEP = (uint32_t)&p_timer->EVENTS_COMPARE[0];
     NRF_PPI->CH[0].TEP = (uint32_t)&p_saadc->TASKS_SAMPLE;
-
     //enable ppi channel 0
     NRF_PPI->CHENSET = PPI_CHENSET_CH0_Msk;
 }
@@ -35,7 +34,7 @@ void saadc_init(NRF_SAADC_Type* p_reg, IRQn_Type irq, uint8_t channel)
 	p_reg->RESOLUTION = SAADC_RESOLUTION_VAL_14bit; 
 	
 	// enable saadc interrupt
-	p_reg->INTENSET = SAADC_INTENSET_END_Msk;
+p_reg->INTENSET = SAADC_INTENSET_END_Msk | SAADC_INTENSET_STARTED_Msk;
 	NVIC_SetPriority(irq, 6);
 	NVIC_EnableIRQ(irq);
 
@@ -50,16 +49,21 @@ void saadc_buffer_init(NRF_SAADC_Type *p_reg, int16_t *buffer, uint32_t len)
     p_reg->RESULT.MAXCNT = len;
 }
 
-void saadc_start(NRF_SAADC_Type *p_reg, NRF_TIMER_Type *p_timer)
+void saadc_start(NRF_SAADC_Type *p_reg, NRF_TIMER_Type *p_timer, int16_t *buffer)
 {
-		//clear events flag
     p_reg->EVENTS_STARTED = 0;
     p_reg->EVENTS_END     = 0;
 
-    //start conversion
-    p_reg->TASKS_START = 1;
-    while (!p_reg->EVENTS_STARTED);  // one-time wait, then PPI takes over
+    // initial pointing to buffer
+    p_reg->RESULT.PTR    = (uint32_t)buffer;
+    p_reg->RESULT.MAXCNT = 1;
 
-    // use timer init in timer_ppi_init(NRF_TIMER_Type* p_reg, uint32_t compare_time_us);
-    p_timer->TASKS_START = 1;
+    p_reg->TASKS_START = 1;
+    while (!p_reg->EVENTS_STARTED); 
+    p_reg->EVENTS_STARTED = 0;      
+
+		// reset timer
+    p_timer->TASKS_STOP  = 1;
+    p_timer->TASKS_CLEAR = 1;
+    p_timer->TASKS_START = 1;       
 }

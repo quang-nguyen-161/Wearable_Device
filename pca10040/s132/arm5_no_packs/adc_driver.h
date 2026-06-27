@@ -12,5 +12,5 @@
 void ppi_init(NRF_TIMER_Type *p_timer, NRF_SAADC_Type *p_saadc);
 void saadc_init(NRF_SAADC_Type* p_reg, IRQn_Type irq, uint8_t channel);
 void saadc_buffer_init(NRF_SAADC_Type *p_reg, int16_t *buffer, uint32_t len);
-void saadc_start(NRF_SAADC_Type *p_reg, NRF_TIMER_Type *p_timer);
+void saadc_start(NRF_SAADC_Type *p_reg, NRF_TIMER_Type *p_timer, int16_t *buffer);
 #endif
