@@ -413,6 +413,11 @@
               <FileType>1</FileType>
               <FilePath>.\timer_driver.c</FilePath>
             </File>
+            <File>
+              <FileName>helper.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\helper.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -4070,6 +4075,11 @@
               <FileName>timer_driver.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\timer_driver.c</FilePath>
+            </File>
+            <File>
+              <FileName>helper.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\helper.c</FilePath>
             </File>
           </Files>
         </Group>

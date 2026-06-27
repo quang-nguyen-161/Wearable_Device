@@ -1,5 +1,7 @@
 #include "max_driver.h"
 #include "timer_driver.h"
+#include "adc_driver.h"
+#include "helper.h"
 #include "nrf_delay.h"
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
@@ -7,6 +9,22 @@
 #define SCL_PIN 2
 #define SDA_PIN 3
 
+int16_t adc_buffer;
+
+volatile bool saadc_done  = false;
+volatile bool sensor_done = false;
+
+
+//saadc interrupt handler
+void SAADC_IRQHandler(void)
+{
+    if (NRF_SAADC->EVENTS_END)
+    {
+        NRF_SAADC->EVENTS_END = 0;
+        saadc_done = true;
+        
+    }
+}
 
 void log_init(void)
 {
@@ -20,33 +38,32 @@ int main()
 {
 		log_init();
 		twim_init(NRF_TWIM0,SCL_PIN,SDA_PIN);
-	uint8_t reg = 0x0D;
-	uint8_t whoami = 0;
-
-	timer_compare_init(NRF_TIMER1,TIMER1_IRQn,1000000);
+		
+		saadc_init(NRF_SAADC, SAADC_IRQn, 0);
+    saadc_buffer_init(NRF_SAADC, &adc_buffer, 1);
+		
+		ppi_init(NRF_TIMER2, NRF_SAADC);
+	
+		saadc_start(NRF_SAADC, NRF_TIMER2);
+		
+		//timer 2 dedicated for saadc, 4ms ticks
+		timer_ppi_init(NRF_TIMER2, 4000);
+	
+		//timer 3 dedicated for sensor ticks, 10ms ticks
+		timer_compare_init(NRF_TIMER3, TIMER3_IRQn, 10000);
+		
+		rb_typedef_t ecg_rb;
+		rb_init(&ecg_rb);
+	
 	
 	while (1)
 	{
-		twim_txrx(NRF_TWIM0,
-           0x1C,
-           &reg,
-           1,
-           &whoami,
-           1);
-
-NRF_LOG_INFO("WHO_AM_I = 0x%02X", whoami);
+		if (saadc_done)
+		{
+			 rb_push(&ecg_rb, adc_buffer);
+		}
 		NRF_LOG_PROCESS();
-		nrf_delay_ms(1000);
+
 	}
 		
-}
-
-void TIMER1_IRQHandler(void)
-{
-    if (NRF_TIMER1->EVENTS_COMPARE[0])
-    {
-        NRF_TIMER1->EVENTS_COMPARE[0] = 0;
-
-        NRF_LOG_INFO("Timer fired");
-    }
 }

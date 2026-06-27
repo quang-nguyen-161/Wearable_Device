@@ -8,4 +8,5 @@
 #include <nrf52_bitfields.h>
 
 void timer_compare_init(NRF_TIMER_Type* p_reg, IRQn_Type irq, uint32_t compare_time_us);
+void timer_ppi_init(NRF_TIMER_Type* p_reg, uint32_t compare_time_us);
 #endif
