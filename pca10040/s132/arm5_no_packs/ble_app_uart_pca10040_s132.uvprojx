@@ -408,6 +408,11 @@
               <FileType>1</FileType>
               <FilePath>.\adc_driver.c</FilePath>
             </File>
+            <File>
+              <FileName>timer_driver.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\timer_driver.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -4060,6 +4065,11 @@
               <FileName>adc_driver.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\adc_driver.c</FilePath>
+            </File>
+            <File>
+              <FileName>timer_driver.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\timer_driver.c</FilePath>
             </File>
           </Files>
         </Group>
