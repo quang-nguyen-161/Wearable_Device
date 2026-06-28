@@ -9,8 +9,7 @@
 
 #include "timer_driver.h"
 
-void ppi_init(NRF_TIMER_Type *p_timer, NRF_SAADC_Type *p_saadc);
-void saadc_init(NRF_SAADC_Type* p_reg, IRQn_Type irq, uint8_t channel);
-void saadc_buffer_init(NRF_SAADC_Type *p_reg, int16_t *buffer, uint32_t len);
-void saadc_start(NRF_SAADC_Type *p_reg, NRF_TIMER_Type *p_timer, int16_t *buffer);
+void saadc_init(void);
+void ppi_init(NRF_TIMER_Type * p_timer, uint16_t compare_time_us);
+bool adc_get_sample(int16_t *p_out);
 #endif
