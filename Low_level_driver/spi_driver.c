@@ -31,7 +31,6 @@ void spim_init(NRF_SPIM_Type* p_reg, uint32_t scl_pin, uint32_t sda_pin)
 void spim_tx(NRF_SPIM_Type* p_reg, uint8_t const *tx_buf, uint8_t len)
 {
 	
-	while (p_reg->EVENTS_END == 0);
 	
 	//clear events
 	p_reg->EVENTS_END   = 0;
@@ -44,8 +43,8 @@ void spim_tx(NRF_SPIM_Type* p_reg, uint8_t const *tx_buf, uint8_t len)
 	
 	//set rx buffer (unused)
 	static uint8_t dummy_rx;
-	p_reg->RXD.PTR = (uint32_t)&dummy_rx;
-	p_reg->RXD.MAXCNT = len;
+	p_reg->RXD.PTR = 0;
+	p_reg->RXD.MAXCNT = 0;
 	
 	//start tx task
 	p_reg->TASKS_START = 1;

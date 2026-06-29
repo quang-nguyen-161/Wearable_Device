@@ -4,6 +4,9 @@
 // twi master with easyDMA, only using low level registers
 // follow instruction on https://docs.nordicsemi.com/r/bundle/ps_nrf52832/page/twim.html
 
+
+#define TWIM_TIMEOUT 100000UL
+
 void twim_tx(NRF_TWIM_Type * p_reg, uint8_t address, uint8_t const * p_buf, size_t len)
 {
 	
@@ -27,6 +30,8 @@ void twim_tx(NRF_TWIM_Type * p_reg, uint8_t address, uint8_t const * p_buf, size
 	// tx start
 	p_reg->TASKS_STARTTX = 1;
 	
+	uint32_t t = TWIM_TIMEOUT;  
+	
 	// wait for LASTTX flag and reset flag
 	while (!p_reg->EVENTS_LASTTX)
 {
@@ -37,21 +42,28 @@ void twim_tx(NRF_TWIM_Type * p_reg, uint8_t address, uint8_t const * p_buf, size
         p_reg->EVENTS_ERROR = 0;
         return;
     }
+		//timeout 
+		if (--t == 0) { p_reg->TASKS_STOP = 1; return; }
 }
-    p_reg->EVENTS_LASTTX = 0;
-	
+    p_reg->EVENTS_LASTTX = 0;	
 	// stop tx
 	p_reg->TASKS_STOP = 1;
-	
+
+	t = TWIM_TIMEOUT;
 	// wait for STOPPED condition flag
 	while (!p_reg->EVENTS_STOPPED)
+	{
 		if (p_reg->EVENTS_ERROR)
     {
         uint32_t err = p_reg->ERRORSRC;
         p_reg->ERRORSRC = err;     
         p_reg->EVENTS_ERROR = 0;
+				p_reg->TASKS_STOP = 1; 
         return;
-    }
+		}
+		//timeout
+		if (--t == 0) { return; }
+	}
     p_reg->EVENTS_STOPPED = 0;
 }
 
@@ -80,7 +92,8 @@ void twim_txrx(NRF_TWIM_Type * p_reg, uint8_t address, uint8_t const *p_tx_buf, 
 
     // change back to tx 
     p_reg->TASKS_STARTTX = 1;
-
+		
+		uint32_t t = TWIM_TIMEOUT;
     // wait for STOP condition flag
     while (!p_reg->EVENTS_STOPPED)
 {
@@ -89,8 +102,11 @@ void twim_txrx(NRF_TWIM_Type * p_reg, uint8_t address, uint8_t const *p_tx_buf, 
         uint32_t err = p_reg->ERRORSRC;
         p_reg->ERRORSRC = err;
         p_reg->EVENTS_ERROR = 0;
+				p_reg->SHORTS = 0; 
+				p_reg->TASKS_STOP = 1;
         return;
     }
+		if (--t == 0) { p_reg->SHORTS = 0; p_reg->TASKS_STOP = 1; return; }
 }
     p_reg->EVENTS_STOPPED = 0;
 

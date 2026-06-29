@@ -3,7 +3,6 @@
 
 #include "twi_driver.h"
 
-
 //register define
 #define MAX30102_I2C_ADDR 0x57
 #define MAX30102_I2C_TIMEOUT 1000
@@ -108,6 +107,11 @@ typedef enum max30102_adc_t
     max30102_adc_16384
 } max30102_adc_t;
 	
+//declared in main.h
+typedef struct sensor_data sensor_data_t;
+
 void max30102_init();
 void max30102_get_sample(uint32_t *ir, uint32_t *red);
+
+void ppg_process(uint32_t *ir_sample, uint32_t *red_sample, sensor_data_t *sensors);
 #endif

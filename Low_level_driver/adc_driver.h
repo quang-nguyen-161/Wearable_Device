@@ -9,7 +9,10 @@
 
 #include "timer_driver.h"
 
-void saadc_init(int16_t *adc_buf);
+//adc callback function pointer
+typedef void (*adc_cb_t)(int16_t sample);
+
+void saadc_init(adc_cb_t cb);
 void ppi_init(NRF_TIMER_Type * p_timer, uint16_t compare_time_us);
 void saadc_enable();
 void saadc_disable();

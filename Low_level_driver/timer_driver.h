@@ -7,6 +7,10 @@
 #include <nrf52.h>
 #include <nrf52_bitfields.h>
 
-void timer_compare_init(NRF_TIMER_Type* p_reg, IRQn_Type irq, uint32_t compare_time_us);
+//timer callback function pointer
+typedef void (*timer_cb_t)();
+
+
+void timer_compare_init(NRF_TIMER_Type* p_reg, timer_cb_t cb , uint32_t compare_time_us);
 void timer_ppi_init(NRF_TIMER_Type* p_reg, uint32_t compare_time_us);
 #endif

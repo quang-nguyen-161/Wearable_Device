@@ -1,5 +1,6 @@
 #include "max_driver.h"
 #include "nrf_delay.h"
+
 void max30102_write(uint8_t register_address, uint8_t value)
 {
 	uint8_t tx_buff[2] = {register_address, value};
@@ -121,4 +122,8 @@ void max30102_get_sample(uint32_t *ir, uint32_t *red)
 
     *ir  = ir_sample;
     *red = red_sample;
+}
+
+void ppg_process(uint32_t *ir_sample, uint32_t *red_sample, sensor_data_t *sensors)
+{
 }

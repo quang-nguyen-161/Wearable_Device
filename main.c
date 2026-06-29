@@ -2,12 +2,12 @@
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
+#include "nrf_delay.h"
 
-volatile int16_t ecg_sample;
-int16_t          ecg_buff[2];
+int32_t ecg_sample;
 
-config_t dev_config;
-
+uint32_t red_sample;
+uint32_t ir_sample;
 typedef enum
 {
     PERIODIC_CAPTURE,
@@ -21,6 +21,16 @@ void log_init(void)
     NRF_LOG_DEFAULT_BACKENDS_INIT();
 }
 
+void sensor_callback()
+{
+    sensor_ticks = true;
+}
+
+void adc_callback(int16_t sample)
+{
+    ecg_sample = sample;
+    ecg_ticks = true;
+}
 void flash_default_config(config_t *dev_config)
 {
     uint32_t dummy;
@@ -79,22 +89,39 @@ void peripheral_init(config_t *dev_config)
     twim_init(NRF_TWIM0, TWI_SCL_PIN, TWI_SDA_PIN);
 
     spim_init(NRF_SPIM1, SPI_SCL_PIN, SPI_SDA_PIN);
-    gpio_output_cfg(LCD_CS_PIN);
-    gpio_output_cfg(LCD_DC_PIN);
-    gpio_output_cfg(LCD_RES_PIN);
 
-    saadc_init(ecg_buff);
+    saadc_init(adc_callback);
     ppi_init(NRF_TIMER2, dev_config->ecg_sample);
 
-    timer_compare_init(NRF_TIMER3, TIMER3_IRQn, dev_config->ppg_sample);
+    timer_compare_init(NRF_TIMER3, sensor_callback, dev_config->ppg_sample);
 
     wdt_init(dev_config->wdt_timeout);
 }
 
+static void send_vitals_values(sensor_data_t sensors)
+{
+   
+    
+	sensors.hr_ecg = sensors.hr_ecg_valid ? sensors.hr_ecg: 0;
+	sensors.hr_ppg = sensors.hr_ppg_valid ? sensors.hr_ppg: 0;
+	sensors.spo2 = sensors.spo2_valid ? sensors.spo2: 0;
+	sensors.temp = sensors.temp_valid ? sensors.temp: 0;
+	uint16_t temp_x10 = (uint16_t)(sensors.temp * 10.0f + 0.5f);
+    uint8_t pkt[5] = {
+        sensors.hr_ecg,
+        sensors.hr_ppg,
+        sensors.spo2,
+        (uint8_t)(temp_x10 & 0xFF),
+        (uint8_t)(temp_x10 >> 8),
+    };
+    ble_app_send(pkt, sizeof(pkt));
+}
 int main(void)
 {
     log_init();
     flash_init();
+	
+		ble_init();
     flash_default_config(&dev_config);
     peripheral_init(&dev_config);
 
@@ -106,20 +133,28 @@ int main(void)
 
     static uint32_t        phase_counter  = 0;
     static periodic_state_t periodic_state = PERIODIC_CAPTURE;
-
+		
+		//sensors init
+		max30102_init();
+		tmp117_init();
+		gc9a01_init();
+		
     while (1)
     {
         wdt_feed();
-
+				nrf_delay_ms(100);
         if (dev_config.mode == MODE_CONTINUOUS)
         {
             if (ecg_ticks)
             {
                 ecg_ticks = false;
+								ecg_process(&ecg_sample, &sensors);
             }
             if (sensor_ticks)
             {
                 sensor_ticks = false;
+								max30102_get_sample(&ir_sample,&red_sample);
+								ppg_process(&ir_sample,&red_sample,&sensors);
             }
         }
 
@@ -157,32 +192,5 @@ int main(void)
                 ecg_ticks = false;
             }
         }
-    }
-}
-
-void SAADC_IRQHandler(void)
-{
-    static uint8_t active = 0;
-
-    if (NRF_SAADC->EVENTS_END)
-    {
-        NRF_SAADC->EVENTS_END = 0;
-
-        ecg_sample = ecg_buff[active];
-        ecg_ticks  = true;
-
-        active                   ^= 1;
-        NRF_SAADC->RESULT.PTR    = (uint32_t)&ecg_buff[active];
-        NRF_SAADC->RESULT.MAXCNT = 1;
-        NRF_SAADC->TASKS_START   = 1;
-    }
-}
-
-void TIMER3_IRQHandler(void)
-{
-    if (NRF_TIMER3->EVENTS_COMPARE[0])
-    {
-        NRF_TIMER3->EVENTS_COMPARE[0] = 0;
-        sensor_ticks = true;
     }
 }

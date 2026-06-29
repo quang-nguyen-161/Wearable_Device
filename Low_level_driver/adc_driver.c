@@ -3,9 +3,14 @@
 // saadc + ppi and timer on nRF52832, only using low level registers
 // follow instruction on https://docs.nordicsemi.com/r/bundle/ps_nrf52832/page/saadc.html
 
+static adc_cb_t adc_callback = NULL;
+
+static int16_t adc_buff[2];
+
 //saadc init function
-void saadc_init(int16_t *adc_buff)
+void saadc_init(adc_cb_t cb)
 {
+		adc_callback = cb;
 		//disable before config
     NRF_SAADC->ENABLE = SAADC_ENABLE_ENABLE_Disabled;
 
@@ -95,3 +100,25 @@ void ppi_disable()
     NRF_PPI->CHENCLR = PPI_CHENCLR_CH0_Msk;
 }
 
+void SAADC_IRQHandler(void)
+{
+    static uint8_t active = 0;
+
+    if (NRF_SAADC->EVENTS_END)
+    {
+        NRF_SAADC->EVENTS_END = 0;
+
+        int16_t sample = adc_buff[active];
+
+        active ^= 1;
+
+        NRF_SAADC->RESULT.PTR    = (uint32_t)&adc_buff[active];
+        NRF_SAADC->RESULT.MAXCNT = 1;
+        NRF_SAADC->TASKS_START   = 1;
+
+        if (adc_callback)
+        {
+            adc_callback(sample);
+        }
+    }
+}

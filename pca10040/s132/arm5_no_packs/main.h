@@ -10,11 +10,12 @@
 #include "adc_driver.h"
 #include "wdt_driver.h"
 #include "nvmc_driver.h"
-
+#include "ble_driver.h"
 //sensors & lcd 
 #include "max_driver.h"
-
-
+#include "tmp117_driver.h"
+#include "gc9a01_driver.h"
+#include "ad8232_driver.h"
 //mode define
 
 #define MODE_CONTINUOUS  0UL
@@ -41,17 +42,11 @@
 #define DEFAULT_WDT_TIMEOUT			10000   //10s
 //pins define
 
-#define TWI_SCL_PIN 28
-#define TWI_SDA_PIN 29
+#define TWI_SCL_PIN 12
+#define TWI_SDA_PIN 13
 
-#define SPI_SCL_PIN 12
-#define SPI_SDA_PIN 13
-
-#define LCD_SCL_PIN SPI_SCL_PIN
-#define LCD_SDA_PIN SPI_SDA_PIN
-#define LCD_DC_PIN  8
-#define LCD_CS_PIN  9
-#define LCD_RES_PIN 10
+#define SPI_SCL_PIN 28
+#define SPI_SDA_PIN 29
 
 //ticks define
 volatile bool sensor_ticks = false;
@@ -71,7 +66,18 @@ typedef struct
 	uint32_t wdt_timeout;
 } config_t;
 
-config_t dev_config;
+typedef struct sensor_data {
+    uint8_t  hr_ppg;     
+    uint8_t  hr_ecg;     
+    uint8_t  spo2;        
+    float    temp;        
+    bool     temp_valid;  
+    bool     hr_ppg_valid;
+    bool     spo2_valid;  
+    bool     hr_ecg_valid;
+} sensor_data_t;
 
+config_t dev_config;
+sensor_data_t sensors;
 
 #endif
