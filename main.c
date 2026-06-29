@@ -1,10 +1,19 @@
-#include "nvmc_driver.h"
+#include "main.h"
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
-#define TEST_PAGE_ADDR  0x0007F000UL   // page 127, last page
-#define BOOT_COUNT_ADDR 0x0007F010UL 
+volatile int16_t ecg_sample;
+int16_t          ecg_buff[2];
+
+config_t dev_config;
+
+typedef enum
+{
+    PERIODIC_CAPTURE,
+    PERIODIC_IDLE
+} periodic_state_t;
+
 void log_init(void)
 {
     ret_code_t err_code = NRF_LOG_INIT(NULL);
@@ -12,48 +21,168 @@ void log_init(void)
     NRF_LOG_DEFAULT_BACKENDS_INIT();
 }
 
-#define DATA_PAGE_ADDR   0x0007F000UL   // page 127 — for test data
-#define COUNT_PAGE_ADDR  0x0007E000UL   // page 126 — dedicated boot counter
+void flash_default_config(config_t *dev_config)
+{
+    uint32_t dummy;
+
+    flash_read(MODE_STATE_ADDR, &dummy, WORD_SIZE);
+    if (dummy == FLASH_ERASED_WORD)
+    {
+        flash_write(MODE_STATE_ADDR, &(uint32_t){DEFAULT_MODE}, WORD_SIZE);
+        dev_config->mode = (uint32_t)DEFAULT_MODE;
+    }
+    else dev_config->mode = (uint32_t)dummy;
+
+    flash_read(PPG_SAMPLE_RATE_ADDR, &dummy, WORD_SIZE);
+    if (dummy == FLASH_ERASED_WORD)
+    {
+        flash_write(PPG_SAMPLE_RATE_ADDR, &(uint32_t){DEFAULT_PPG_RATE_US}, WORD_SIZE);
+        dev_config->ppg_sample = DEFAULT_PPG_RATE_US;
+    }
+    else dev_config->ppg_sample = dummy;
+
+    flash_read(ECG_SAMPLE_RATE_ADDR, &dummy, WORD_SIZE);
+    if (dummy == FLASH_ERASED_WORD)
+    {
+        flash_write(ECG_SAMPLE_RATE_ADDR, &(uint32_t){DEFAULT_ECG_RATE_US}, WORD_SIZE);
+        dev_config->ecg_sample = DEFAULT_ECG_RATE_US;
+    }
+    else dev_config->ecg_sample = dummy;
+
+    flash_read(CAPTURE_TICKS_ADDR, &dummy, WORD_SIZE);
+    if (dummy == FLASH_ERASED_WORD)
+    {
+        flash_write(CAPTURE_TICKS_ADDR, &(uint32_t){DEFAULT_CAPTURE_TICKS}, WORD_SIZE);
+        dev_config->capture_time = DEFAULT_CAPTURE_TICKS;
+    }
+    else dev_config->capture_time = dummy;
+
+    flash_read(PERIODIC_TICKS_ADDR, &dummy, WORD_SIZE);
+    if (dummy == FLASH_ERASED_WORD)
+    {
+        flash_write(PERIODIC_TICKS_ADDR, &(uint32_t){DEFAULT_PERIODIC_TICKS}, WORD_SIZE);
+        dev_config->periodic_time = DEFAULT_PERIODIC_TICKS;
+    }
+    else dev_config->periodic_time = dummy;
+
+    flash_read(WDT_TIMEOUT_ADDR, &dummy, WORD_SIZE);
+    if (dummy == FLASH_ERASED_WORD)
+    {
+        flash_write(WDT_TIMEOUT_ADDR, &(uint32_t){DEFAULT_WDT_TIMEOUT}, WORD_SIZE);
+        dev_config->wdt_timeout = DEFAULT_WDT_TIMEOUT;
+    }
+    else dev_config->wdt_timeout = dummy;
+}
+
+void peripheral_init(config_t *dev_config)
+{
+    twim_init(NRF_TWIM0, TWI_SCL_PIN, TWI_SDA_PIN);
+
+    spim_init(NRF_SPIM1, SPI_SCL_PIN, SPI_SDA_PIN);
+    gpio_output_cfg(LCD_CS_PIN);
+    gpio_output_cfg(LCD_DC_PIN);
+    gpio_output_cfg(LCD_RES_PIN);
+
+    saadc_init(ecg_buff);
+    ppi_init(NRF_TIMER2, dev_config->ecg_sample);
+
+    timer_compare_init(NRF_TIMER3, TIMER3_IRQn, dev_config->ppg_sample);
+
+    wdt_init(dev_config->wdt_timeout);
+}
 
 int main(void)
 {
     log_init();
     flash_init();
-		
-    /* ---- read boot count BEFORE any erase ---- */
-    uint32_t boot_count;
-    flash_read(COUNT_PAGE_ADDR, &boot_count, sizeof(boot_count));
+    flash_default_config(&dev_config);
+    peripheral_init(&dev_config);
 
-    /* first boot: flash reads 0xFFFFFFFF (erased) ? treat as 0 */
-    if (boot_count == 0xFFFFFFFF)
+    const uint32_t capture_threshold =
+        (dev_config.capture_time  * 1000UL) / dev_config.ppg_sample;
+
+    const uint32_t periodic_threshold =
+        (dev_config.periodic_time * 1000UL) / dev_config.ppg_sample;
+
+    static uint32_t        phase_counter  = 0;
+    static periodic_state_t periodic_state = PERIODIC_CAPTURE;
+
+    while (1)
     {
-        boot_count = 0;
+        wdt_feed();
+
+        if (dev_config.mode == MODE_CONTINUOUS)
+        {
+            if (ecg_ticks)
+            {
+                ecg_ticks = false;
+            }
+            if (sensor_ticks)
+            {
+                sensor_ticks = false;
+            }
+        }
+
+        if (dev_config.mode == MODE_PERIODIC)
+        {
+            if (sensor_ticks)
+            {
+                sensor_ticks = false;
+                phase_counter++;
+
+                if (periodic_state == PERIODIC_CAPTURE)
+                {
+                    if (phase_counter >= capture_threshold)
+                    {
+                        phase_counter  = 0;
+                        periodic_state = PERIODIC_IDLE;
+                        ppi_disable();
+                        saadc_disable();
+                    }
+                }
+                else
+                {
+                    if (phase_counter >= periodic_threshold)
+                    {
+                        phase_counter  = 0;
+                        periodic_state = PERIODIC_CAPTURE;
+                        ppi_enable();
+                        saadc_enable();
+                    }
+                }
+            }
+
+            if (periodic_state == PERIODIC_CAPTURE && ecg_ticks)
+            {
+                ecg_ticks = false;
+            }
+        }
     }
+}
 
-    boot_count++;
-    NRF_LOG_INFO("Boot count: %d", boot_count);
+void SAADC_IRQHandler(void)
+{
+    static uint8_t active = 0;
 
-    /* erase count page, write new value */
-    flash_page_erase(COUNT_PAGE_ADDR);
-    flash_write(COUNT_PAGE_ADDR, &boot_count, sizeof(boot_count));
-
-    /* ---- test data on its own page ---- */
-    flash_page_erase(DATA_PAGE_ADDR);
-    uint32_t data[4] = {0xDEADBEEF, 0xCAFEBABE, 0x12345678, 0xAABBCCDD};
-    flash_write(DATA_PAGE_ADDR, data, sizeof(data));
-
-    uint32_t readback[4];
-    flash_read(DATA_PAGE_ADDR, readback, sizeof(readback));
-
-    NRF_LOG_INFO("Flash readback (words):");
-    for (size_t i = 0; i < 4; i++)
+    if (NRF_SAADC->EVENTS_END)
     {
-        NRF_LOG_INFO("  [%d] = 0x%08X", i, readback[i]);
+        NRF_SAADC->EVENTS_END = 0;
+
+        ecg_sample = ecg_buff[active];
+        ecg_ticks  = true;
+
+        active                   ^= 1;
+        NRF_SAADC->RESULT.PTR    = (uint32_t)&ecg_buff[active];
+        NRF_SAADC->RESULT.MAXCNT = 1;
+        NRF_SAADC->TASKS_START   = 1;
     }
-    NRF_LOG_FLUSH();
+}
 
-    while (true)
+void TIMER3_IRQHandler(void)
+{
+    if (NRF_TIMER3->EVENTS_COMPARE[0])
     {
-        NRF_LOG_PROCESS();
+        NRF_TIMER3->EVENTS_COMPARE[0] = 0;
+        sensor_ticks = true;
     }
 }
