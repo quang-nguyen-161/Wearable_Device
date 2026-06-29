@@ -14,3 +14,10 @@ Used Peripherals:
 + NVMC: Non-volatile memory controller for flash storage without using existed FDS layer
 + WDT: Watch-dog timer
 
+Sensors & LCD:
++ MAX30102: I2C, use for hr & spo2
++ TMP117: I2C, use for temperature
++ AD8232: analog output, use for ECG hr
++ GC9A01: SPI, lcd use for display
+- MAX30102 & TMP117 use the same I2C bus
+- AD8232 connected to AIN0 (P0.2) of nRF52832
