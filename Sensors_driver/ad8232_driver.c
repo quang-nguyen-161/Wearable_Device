@@ -2,7 +2,19 @@
 
 
 
-void ecg_process(int32_t *ecg_sample, sensor_data_t *sensors)
+float ecg_filter_process(uint32_t sample)
 {
-
+	//iir filter
+	//adaptive filter
+	
+	//return processed sample
+	return (float) sample;
+}
+void ecg_process(rb_typedef_t *ecg_buff, uint8_t *hr)
+{
+	//calculate hr 
+	
+	//peaks detect 
+	*hr = 100;
+	
 }

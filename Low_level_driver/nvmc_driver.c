@@ -170,3 +170,26 @@ void flash_default_config(config_t *dev_config)
 		NRF_LOG_INFO("lcd_refresh   : %u", dev_config->lcd_refresh);
 }
 
+void flash_save_config(const config_t *dev_config)
+{
+    flash_page_erase(MODE_STATE_ADDR);
+
+    flash_write(MODE_STATE_ADDR,      &dev_config->mode,          WORD_SIZE);
+    flash_write(PPG_SAMPLE_RATE_ADDR, &dev_config->ppg_sample,    WORD_SIZE);
+    flash_write(ECG_SAMPLE_RATE_ADDR, &dev_config->ecg_sample,    WORD_SIZE);
+    flash_write(CAPTURE_TICKS_ADDR,   &dev_config->capture_time,  WORD_SIZE);
+    flash_write(PERIODIC_TICKS_ADDR,  &dev_config->periodic_time, WORD_SIZE);
+    flash_write(WDT_TIMEOUT_ADDR,     &dev_config->wdt_timeout,   WORD_SIZE);
+    flash_write(BLE_SEND_ADDR,        &dev_config->ble_send_time, WORD_SIZE);
+    flash_write(LCD_REFRESH_ADDR,     &dev_config->lcd_refresh,   WORD_SIZE);
+
+    NRF_LOG_INFO("mode          : %u", dev_config->mode);
+    NRF_LOG_INFO("ppg_sample    : %u", dev_config->ppg_sample);
+    NRF_LOG_INFO("ecg_sample    : %u", dev_config->ecg_sample);
+    NRF_LOG_INFO("capture_time  : %u", dev_config->capture_time);
+    NRF_LOG_INFO("periodic_time : %u", dev_config->periodic_time);
+		NRF_LOG_INFO("ble_send_time : %u", dev_config->ble_send_time);
+    NRF_LOG_INFO("wdt_timeout   : %u", dev_config->wdt_timeout);
+		NRF_LOG_INFO("lcd_refresh   : %u", dev_config->lcd_refresh);
+}
+

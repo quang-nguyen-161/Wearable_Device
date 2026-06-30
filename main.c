@@ -3,7 +3,7 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 #include "nrf_delay.h"
-
+#include "nrf_pwr_mgmt.h"
 int32_t ecg_sample;
 
 uint32_t red_sample;
@@ -11,7 +11,7 @@ uint32_t ir_sample;
 
 rb_typedef_t rb_ir;
 rb_typedef_t rb_red;
-
+rb_typedef_t rb_ecg;
 typedef enum
 {
     PERIODIC_CAPTURE,
@@ -23,6 +23,17 @@ void log_init(void)
     ret_code_t err_code = NRF_LOG_INIT(NULL);
     APP_ERROR_CHECK(err_code);
     NRF_LOG_DEFAULT_BACKENDS_INIT();
+}
+
+void power_management_init(void)
+{
+    ret_code_t err = nrf_pwr_mgmt_init();
+    APP_ERROR_CHECK(err);
+}
+
+void idle_state_handle(void)
+{
+    if (!NRF_LOG_PROCESS()) { nrf_pwr_mgmt_run(); }
 }
 
 void sensor_callback()
@@ -104,7 +115,9 @@ int main(void)
 		
 		uint32_t ble_send_threshold = 
 				(dev_config.ble_send_time * 1000UL) / dev_config.ppg_sample;
-		NRF_LOG_INFO("ble_send_threshold: %d\n",ble_send_threshold);
+		uint32_t lcd_refresh_threshold = 
+				(dev_config.lcd_refresh * 1000UL) / dev_config.ppg_sample;
+		static uint32_t 			 lcd_refresh_counter = 0;
 	  static uint32_t 			 ble_send_counter = 0;
     static uint32_t        phase_counter  = 0;
     static periodic_state_t periodic_state = PERIODIC_CAPTURE;
@@ -118,16 +131,16 @@ int main(void)
 		
     while (1)
     {
-        wdt_feed();
-				NRF_LOG_PROCESS();
-				
+        wdt_feed();				
 				//continuous mode
         if (dev_config.mode == MODE_CONTINUOUS)
         {
             if (ecg_ticks)
             {
-                ecg_ticks = false;							
-								ecg_process(&ecg_sample, &sensors);
+                ecg_ticks = false;		
+								float ecg_filtered = ecg_filter_process(ecg_sample);
+								rb_push(&rb_ecg, ecg_filtered);
+								ecg_process(&rb_ecg, &sensors.hr_ecg);
 							//NRF_LOG_INFO("ecg: %d\n",ecg_sample);
 											
 
@@ -139,10 +152,10 @@ int main(void)
 								ble_send_counter++;
 								//NRF_LOG_INFO("sensors ticks\n");
 								max30102_get_sample(&ir_sample,&red_sample);
-								float ir_filtered = filter_process(ir_sample);
+								float ir_filtered = ppg_filter_process(ir_sample);
 								rb_push(&rb_ir, ir_filtered);
 							
-								float red_filtered = filter_process(red_sample);
+								float red_filtered = ppg_filter_process(red_sample);
 								rb_push(&rb_red, red_filtered);
 							
 								ppg_process(&rb_ir,&rb_red,&sensors.hr_ppg,&sensors.spo2);
@@ -159,6 +172,14 @@ int main(void)
                     }
 									
 						}
+						//lcd refresh
+						if (lcd_refresh_counter >= lcd_refresh_threshold)
+						{
+							lcd_refresh_counter = 0;
+							
+							//dashboard update here
+							
+						}
         }
 				
 				//periodic mode
@@ -170,10 +191,10 @@ int main(void)
                 phase_counter++;
 								
 								max30102_get_sample(&ir_sample,&red_sample);
-								float ir_filtered = filter_process(ir_sample);
+								float ir_filtered = ppg_filter_process(ir_sample);
 								rb_push(&rb_ir, ir_filtered);
 							
-								float red_filtered = filter_process(red_sample);
+								float red_filtered = ppg_filter_process(red_sample);
 								rb_push(&rb_red, red_filtered);
 							
 								ppg_process(&rb_ir,&rb_red,&sensors.hr_ppg,&sensors.spo2);
@@ -211,8 +232,17 @@ int main(void)
 						//ecg only sample in capture phase
             if (periodic_state == PERIODIC_CAPTURE && ecg_ticks)
             {
-                ecg_ticks = false;
+                ecg_ticks = false;		
+								float ecg_filtered = ecg_filter_process(ecg_sample);
+								rb_push(&rb_ecg, ecg_filtered);
+								ecg_process(&rb_ecg, &sensors.hr_ecg);
+							//NRF_LOG_INFO("ecg: %d\n",ecg_sample);
             }
+        }
+		if (!ecg_ticks && !sensor_ticks)
+        {
+						
+            idle_state_handle();
         }
     }
 }

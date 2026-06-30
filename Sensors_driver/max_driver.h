@@ -112,6 +112,6 @@ typedef struct sensor_data sensor_data_t;
 
 void max30102_init();
 void max30102_get_sample(uint32_t *ir, uint32_t *red);
-float filter_process(uint32_t sample);
+float ppg_filter_process(uint32_t sample);
 void ppg_process(rb_typedef_t *ir_buff, rb_typedef_t *red_buff, uint8_t *hr, uint8_t *spo2);
 #endif

@@ -125,7 +125,7 @@ void max30102_get_sample(uint32_t *ir, uint32_t *red)
     *red = red_sample;
 }
 
-float filter_process(uint32_t sample)
+float ppg_filter_process(uint32_t sample)
 {
 	//iir filter
 	//adaptive filter

@@ -67,4 +67,5 @@ void flash_erase_all();
 void flash_write(uint32_t dest, const void *src, size_t len);
 void flash_read(uint32_t src, void *dest, size_t len);
 void flash_default_config(config_t *dev_config);
+void flash_save_config(const config_t *dev_config);
 #endif
