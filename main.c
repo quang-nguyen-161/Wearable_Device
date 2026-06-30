@@ -8,6 +8,10 @@ int32_t ecg_sample;
 
 uint32_t red_sample;
 uint32_t ir_sample;
+
+rb_typedef_t rb_ir;
+rb_typedef_t rb_red;
+
 typedef enum
 {
     PERIODIC_CAPTURE,
@@ -31,58 +35,6 @@ void adc_callback(int16_t sample)
     ecg_sample = sample;
     ecg_ticks = true;
 }
-void flash_default_config(config_t *dev_config)
-{
-    uint32_t dummy;
-
-    flash_read(MODE_STATE_ADDR, &dummy, WORD_SIZE);
-    if (dummy == FLASH_ERASED_WORD)
-    {
-        flash_write(MODE_STATE_ADDR, &(uint32_t){DEFAULT_MODE}, WORD_SIZE);
-        dev_config->mode = (uint32_t)DEFAULT_MODE;
-    }
-    else dev_config->mode = (uint32_t)dummy;
-
-    flash_read(PPG_SAMPLE_RATE_ADDR, &dummy, WORD_SIZE);
-    if (dummy == FLASH_ERASED_WORD)
-    {
-        flash_write(PPG_SAMPLE_RATE_ADDR, &(uint32_t){DEFAULT_PPG_RATE_US}, WORD_SIZE);
-        dev_config->ppg_sample = DEFAULT_PPG_RATE_US;
-    }
-    else dev_config->ppg_sample = dummy;
-
-    flash_read(ECG_SAMPLE_RATE_ADDR, &dummy, WORD_SIZE);
-    if (dummy == FLASH_ERASED_WORD)
-    {
-        flash_write(ECG_SAMPLE_RATE_ADDR, &(uint32_t){DEFAULT_ECG_RATE_US}, WORD_SIZE);
-        dev_config->ecg_sample = DEFAULT_ECG_RATE_US;
-    }
-    else dev_config->ecg_sample = dummy;
-
-    flash_read(CAPTURE_TICKS_ADDR, &dummy, WORD_SIZE);
-    if (dummy == FLASH_ERASED_WORD)
-    {
-        flash_write(CAPTURE_TICKS_ADDR, &(uint32_t){DEFAULT_CAPTURE_TICKS}, WORD_SIZE);
-        dev_config->capture_time = DEFAULT_CAPTURE_TICKS;
-    }
-    else dev_config->capture_time = dummy;
-
-    flash_read(PERIODIC_TICKS_ADDR, &dummy, WORD_SIZE);
-    if (dummy == FLASH_ERASED_WORD)
-    {
-        flash_write(PERIODIC_TICKS_ADDR, &(uint32_t){DEFAULT_PERIODIC_TICKS}, WORD_SIZE);
-        dev_config->periodic_time = DEFAULT_PERIODIC_TICKS;
-    }
-    else dev_config->periodic_time = dummy;
-
-    flash_read(WDT_TIMEOUT_ADDR, &dummy, WORD_SIZE);
-    if (dummy == FLASH_ERASED_WORD)
-    {
-        flash_write(WDT_TIMEOUT_ADDR, &(uint32_t){DEFAULT_WDT_TIMEOUT}, WORD_SIZE);
-        dev_config->wdt_timeout = DEFAULT_WDT_TIMEOUT;
-    }
-    else dev_config->wdt_timeout = dummy;
-}
 
 void peripheral_init(config_t *dev_config)
 {
@@ -100,8 +52,16 @@ void peripheral_init(config_t *dev_config)
 
 static void send_vitals_values(sensor_data_t sensors)
 {
-   
-    
+  if (40 < sensors.hr_ppg && sensors.hr_ppg < 150)
+    sensors.hr_ppg_valid = true;
+	else
+    sensors.hr_ppg_valid = false;
+  
+	if ( 80 < sensors.spo2 && sensors.spo2 <= 100) sensors.spo2_valid = true;
+	else sensors.spo2_valid = false;
+	
+	if (30.0 < sensors.temp && sensors.temp <= 40) sensors.temp_valid = true;
+	else sensors.temp_valid = false;
 	sensors.hr_ecg = sensors.hr_ecg_valid ? sensors.hr_ecg: 0;
 	sensors.hr_ppg = sensors.hr_ppg_valid ? sensors.hr_ppg: 0;
 	sensors.spo2 = sensors.spo2_valid ? sensors.spo2: 0;
@@ -114,23 +74,38 @@ static void send_vitals_values(sensor_data_t sensors)
         (uint8_t)(temp_x10 & 0xFF),
         (uint8_t)(temp_x10 >> 8),
     };
-    ble_app_send(pkt, sizeof(pkt));
+    if (ble_app_send(pkt, sizeof(pkt)) == NRF_SUCCESS)
+		{
+    NRF_LOG_INFO("packet sent");
+		}
 }
 int main(void)
 {
     log_init();
     flash_init();
+		
+		flash_default_config(&dev_config);
+		
+		ble_stack_init();   
+    gap_params_init();
+    gatt_init();
+    services_init();
+    advertising_init();
+    conn_params_init();
 	
-		ble_init();
-    flash_default_config(&dev_config);
     peripheral_init(&dev_config);
-
-    const uint32_t capture_threshold =
+		NRF_LOG_INFO("peripheral init\n");
+		NRF_LOG_FLUSH();
+    uint32_t capture_threshold =
         (dev_config.capture_time  * 1000UL) / dev_config.ppg_sample;
-
-    const uint32_t periodic_threshold =
+		
+    uint32_t periodic_threshold =
         (dev_config.periodic_time * 1000UL) / dev_config.ppg_sample;
-
+		
+		uint32_t ble_send_threshold = 
+				(dev_config.ble_send_time * 1000UL) / dev_config.ppg_sample;
+		NRF_LOG_INFO("ble_send_threshold: %d\n",ble_send_threshold);
+	  static uint32_t 			 ble_send_counter = 0;
     static uint32_t        phase_counter  = 0;
     static periodic_state_t periodic_state = PERIODIC_CAPTURE;
 		
@@ -139,44 +114,91 @@ int main(void)
 		tmp117_init();
 		gc9a01_init();
 		
+		advertising_start();
+		
     while (1)
     {
         wdt_feed();
-				nrf_delay_ms(100);
+				NRF_LOG_PROCESS();
+				
+				//continuous mode
         if (dev_config.mode == MODE_CONTINUOUS)
         {
             if (ecg_ticks)
             {
-                ecg_ticks = false;
+                ecg_ticks = false;							
 								ecg_process(&ecg_sample, &sensors);
+							//NRF_LOG_INFO("ecg: %d\n",ecg_sample);
+											
+
             }
+						//10ms sensors ticks
             if (sensor_ticks)
             {
                 sensor_ticks = false;
+								ble_send_counter++;
+								//NRF_LOG_INFO("sensors ticks\n");
 								max30102_get_sample(&ir_sample,&red_sample);
-								ppg_process(&ir_sample,&red_sample,&sensors);
+								float ir_filtered = filter_process(ir_sample);
+								rb_push(&rb_ir, ir_filtered);
+							
+								float red_filtered = filter_process(red_sample);
+								rb_push(&rb_red, red_filtered);
+							
+								ppg_process(&rb_ir,&rb_red,&sensors.hr_ppg,&sensors.spo2);
+								sensors.temp = tmp117_get_temp();
             }
+						// if ble send counter is full then send ble packers
+						if (ble_send_counter >= ble_send_threshold)
+						{
+								ble_send_counter = 0;
+								
+								if (ble_app_ready_to_send())
+                    {
+                        send_vitals_values(sensors);
+                    }
+									
+						}
         }
-
+				
+				//periodic mode
         if (dev_config.mode == MODE_PERIODIC)
         {
             if (sensor_ticks)
             {
                 sensor_ticks = false;
                 phase_counter++;
-
+								
+								max30102_get_sample(&ir_sample,&red_sample);
+								float ir_filtered = filter_process(ir_sample);
+								rb_push(&rb_ir, ir_filtered);
+							
+								float red_filtered = filter_process(red_sample);
+								rb_push(&rb_red, red_filtered);
+							
+								ppg_process(&rb_ir,&rb_red,&sensors.hr_ppg,&sensors.spo2);
+								sensors.temp = tmp117_get_temp();
+							
+								//capture phase
                 if (periodic_state == PERIODIC_CAPTURE)
                 {
+										//entering sleep phase
                     if (phase_counter >= capture_threshold)
                     {
                         phase_counter  = 0;
                         periodic_state = PERIODIC_IDLE;
+												if (ble_app_ready_to_send())
+                    {
+                        send_vitals_values(sensors);
+                    }
                         ppi_disable();
                         saadc_disable();
                     }
                 }
+								//sleep phase
                 else
                 {
+									  //entering capture phase
                     if (phase_counter >= periodic_threshold)
                     {
                         phase_counter  = 0;
@@ -186,7 +208,7 @@ int main(void)
                     }
                 }
             }
-
+						//ecg only sample in capture phase
             if (periodic_state == PERIODIC_CAPTURE && ecg_ticks)
             {
                 ecg_ticks = false;

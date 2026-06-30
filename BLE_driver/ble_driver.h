@@ -1,56 +1,36 @@
-#ifndef _BLE_H_
-#define _BLE_H_
+#ifndef BLE_APP_H
+#define BLE_APP_H
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <string.h>
 
-#include "nordic_common.h"
-#include "ble_hci.h"
-#include "ble_advdata.h"
-#include "ble_advertising.h"
-#include "ble_conn_params.h"
-#include "nrf_sdh.h"
-#include "nrf_sdh_soc.h"
-#include "nrf_sdh_ble.h"
-#include "nrf_ble_gatt.h"
-#include "nrf_ble_qwr.h"
-#include "app_timer.h"
-#include "app_error.h"
-#include "nrf_log.h"
-#include "nrf_error.h"
+/* --------------------------------------------------------------
+ *  BLE — stack init, GAP/GATT, advertising, custom service
+ *  (init chain called explicitly from main(), wearable_claude-style —
+ *   no separate ble_app module)
+ * ------------------------------------------------------------ */
+void ble_stack_init(void);
+void gap_params_init(void);
+void gatt_init(void);
+void services_init(void);
+void advertising_init(void);
+void conn_params_init(void);
+void advertising_start(void);
 
-#include "cus_service.h"
-
-#define APP_BLE_CONN_CFG_TAG        1
-#define DEVICE_NAME                 "Wearable_dev"
-#define NUS_SERVICE_UUID_TYPE       BLE_UUID_TYPE_VENDOR_BEGIN
-#define APP_BLE_OBSERVER_PRIO       3
-#define APP_ADV_INTERVAL            64        
-#define APP_ADV_DURATION            18000       
-#define MIN_CONN_INTERVAL           MSEC_TO_UNITS(200,  UNIT_1_25_MS)
-#define MAX_CONN_INTERVAL           MSEC_TO_UNITS(20,  UNIT_1_25_MS)
-#define SLAVE_LATENCY               0
-#define CONN_SUP_TIMEOUT            MSEC_TO_UNITS(4000, UNIT_10_MS)
-#define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000)
-#define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(30000)
-#define MAX_CONN_PARAMS_UPDATE_COUNT    3
-
-#define PACKET_SAMPLES_DEFAULT   50U     
-#define PACKET_SAMPLES_MAX       128U   
-
-
-BLE_CUS_DEF(m_cus);
-NRF_BLE_GATT_DEF(m_gatt);
-NRF_BLE_QWR_DEF(m_qwr);
-BLE_ADVERTISING_DEF(m_advertising);
-
-static uint16_t   m_conn_handle        = BLE_CONN_HANDLE_INVALID;
-static uint16_t   m_ble_max_data_len   = BLE_GATT_ATT_MTU_DEFAULT - 3;
-static volatile bool m_mtu_negotiated  = false; 
-static volatile int8_t m_rssi          = 0;     
-static ble_uuid_t m_adv_uuids[]        = { {CUS_SERVICE_UUID, NUS_SERVICE_UUID_TYPE} };
-
-void ble_init();
+/* Thin accessors over the BLE connection state */
+uint16_t ble_app_conn_handle(void);
+bool     ble_app_is_connected(void);
+bool     ble_app_ready_to_send(void);   /* connected AND MTU exchange completed */
 uint32_t ble_app_send(uint8_t const *data, uint16_t len);
-#endif
+
+/* This device's own BLE address (LSB-first, as returned by the SoftDevice) */
+void     ble_app_get_addr(uint8_t addr[6]);
+
+/* Latest RSSI in dBm (0 if not connected / no sample yet) */
+int8_t   ble_app_get_rssi(void);
+
+/* Change connection interval at runtime. min_ms / max_ms in milliseconds.
+ * If connected, requests update immediately; otherwise takes effect on next connection. */
+void     ble_app_set_conn_interval(uint16_t min_ms, uint16_t max_ms);
+
+#endif /* BLE_APP_H */

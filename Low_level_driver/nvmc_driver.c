@@ -89,3 +89,84 @@ void flash_read(uint32_t src, void *dest, size_t len)
 {
 	 memcpy(dest, (const void *)src, len);
 }
+
+static uint32_t flash_read_default(uint32_t addr, uint32_t default_value, uint32_t min, uint32_t max)
+{
+    uint32_t value;
+
+    flash_read(addr, &value, WORD_SIZE);
+
+		//check if flash addr emty
+    if (value == FLASH_ERASED_WORD)
+    {
+        flash_write(addr, &default_value, WORD_SIZE);
+        return default_value;
+    }
+
+    //check if flash addr invalid
+    if (value < min || value > max)
+    {
+        flash_write(addr, &default_value, WORD_SIZE);
+        return default_value;
+    }
+    return value;
+}
+
+void flash_default_config(config_t *dev_config)
+{
+    dev_config->mode = flash_read_default(
+        MODE_STATE_ADDR,
+        DEFAULT_MODE,
+        MODE_CONTINUOUS,
+        MODE_PERIODIC);
+
+    dev_config->ppg_sample = flash_read_default(
+        PPG_SAMPLE_RATE_ADDR,
+        DEFAULT_PPG_RATE_US,
+        1000,
+        1000000);
+
+    dev_config->ecg_sample = flash_read_default(
+        ECG_SAMPLE_RATE_ADDR,
+        DEFAULT_ECG_RATE_US,
+        100,
+        100000);
+
+    dev_config->capture_time = flash_read_default(
+        CAPTURE_TICKS_ADDR,
+        DEFAULT_CAPTURE_TICKS,
+        1,
+        3600000);
+
+    dev_config->periodic_time = flash_read_default(
+        PERIODIC_TICKS_ADDR,
+        DEFAULT_PERIODIC_TICKS,
+        1,
+        3600000);
+
+    dev_config->wdt_timeout = flash_read_default(
+        WDT_TIMEOUT_ADDR,
+        DEFAULT_WDT_TIMEOUT,
+        100,
+        60000);
+		dev_config->ble_send_time = flash_read_default(
+        BLE_SEND_ADDR,
+        DEFAULT_BLE_SEND,
+        100,
+        60000);
+		dev_config->lcd_refresh = flash_read_default(
+        LCD_REFRESH_ADDR,
+        DEFAULT_LCD_REFRESH,
+        100,
+        60000);
+
+    NRF_LOG_INFO("mode          : %u", dev_config->mode);
+    NRF_LOG_INFO("ppg_sample    : %u", dev_config->ppg_sample);
+    NRF_LOG_INFO("ecg_sample    : %u", dev_config->ecg_sample);
+    NRF_LOG_INFO("capture_time  : %u", dev_config->capture_time);
+    NRF_LOG_INFO("periodic_time : %u", dev_config->periodic_time);
+		NRF_LOG_INFO("ble_send_time : %u", dev_config->ble_send_time);
+    NRF_LOG_INFO("wdt_timeout   : %u", dev_config->wdt_timeout);
+		NRF_LOG_INFO("lcd_refresh   : %u", dev_config->lcd_refresh);
+}
+

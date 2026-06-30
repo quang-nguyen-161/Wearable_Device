@@ -1,7 +1,57 @@
+#include <string.h>
+
+#include "nordic_common.h"
+#include "ble_hci.h"
+#include "ble_advdata.h"
+#include "ble_advertising.h"
+#include "ble_conn_params.h"
+#include "nrf_sdh.h"
+#include "nrf_sdh_soc.h"
+#include "nrf_sdh_ble.h"
+#include "nrf_ble_gatt.h"
+#include "nrf_ble_qwr.h"
+#include "app_timer.h"
+#include "app_error.h"
+#include "nrf_log.h"
+
 #include "ble_driver.h"
+#include "cus_service.h"
 
+/* ------------------------------------------------------------------ */
+/*  BLE configuration                                                  */
+/* ------------------------------------------------------------------ */
+#define APP_BLE_CONN_CFG_TAG        1
+#define DEVICE_NAME                 "ECG_dev"
+#define NUS_SERVICE_UUID_TYPE       BLE_UUID_TYPE_VENDOR_BEGIN
+#define APP_BLE_OBSERVER_PRIO       3
+#define APP_ADV_INTERVAL            64          /* 40 ms */
+#define APP_ADV_DURATION            18000       /* 180 s  */
+#define MIN_CONN_INTERVAL           MSEC_TO_UNITS(200,  UNIT_1_25_MS)
+#define MAX_CONN_INTERVAL           MSEC_TO_UNITS(200,  UNIT_1_25_MS)
+#define SLAVE_LATENCY               0
+#define CONN_SUP_TIMEOUT            MSEC_TO_UNITS(4000, UNIT_10_MS)
+#define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000)
+#define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(30000)
+#define MAX_CONN_PARAMS_UPDATE_COUNT    3
 
+#define PACKET_SAMPLES_DEFAULT   50U     /* 250 Hz x 200 ms */
+#define PACKET_SAMPLES_MAX       128U    /* hard cap: 256 bytes < any negotiated MTU */
 
+/* ------------------------------------------------------------------ */
+/*  BLE instances                                                       */
+/* ------------------------------------------------------------------ */
+BLE_CUS_DEF(m_cus);
+NRF_BLE_GATT_DEF(m_gatt);
+NRF_BLE_QWR_DEF(m_qwr);
+BLE_ADVERTISING_DEF(m_advertising);
+
+static uint16_t   m_conn_handle        = BLE_CONN_HANDLE_INVALID;
+static uint16_t   m_ble_max_data_len   = BLE_GATT_ATT_MTU_DEFAULT - 3;
+static volatile bool m_mtu_negotiated  = false;  /* set once ATT MTU exchange completes */
+static volatile int8_t m_rssi          = 0;      /* latest RSSI, updated via BLE_GAP_EVT_RSSI_CHANGED */
+static ble_uuid_t m_adv_uuids[]        = { {CUS_SERVICE_UUID, NUS_SERVICE_UUID_TYPE} };
+
+/* ---------- GAP ---------- */
 void gap_params_init(void)
 {
     ble_gap_conn_params_t   p;
@@ -17,9 +67,11 @@ void gap_params_init(void)
     sd_ble_gap_ppcp_set(&p);
 }
 
+/* ---------- QWR error ---------- */
 void nrf_qwr_error_handler(uint32_t nrf_error)  { APP_ERROR_HANDLER(nrf_error); }
 
-void ble_data_handler(ble_cus_evt_t * p_evt)
+/* ---------- CUS data handler ---------- */
+void cus_data_handler(ble_cus_evt_t * p_evt)
 {
     if (p_evt->type == BLE_CUS_EVT_NOTIFY_ENABLE)
     {
@@ -31,14 +83,15 @@ void ble_data_handler(ble_cus_evt_t * p_evt)
     }
     else if (p_evt->type == BLE_CUS_EVT_RX_DATA)
     {
-      /*  
-			cmd_rx_handle(p_evt->params.rx_data.p_data,
+			/*
+        cmd_rx_handle(p_evt->params.rx_data.p_data,
                       p_evt->params.rx_data.length,
                       PACKET_SAMPLES_MAX);
 			*/
     }
 }
 
+/* ---------- Services ---------- */
 void services_init(void)
 {
     nrf_ble_qwr_init_t qwr = {0};
@@ -46,10 +99,11 @@ void services_init(void)
     nrf_ble_qwr_init(&m_qwr, &qwr);
 
     ble_cus_init_t cus = {0};
-    cus.data_handler = ble_data_handler;
+    cus.data_handler = cus_data_handler;
     ble_cus_init(&m_cus, &cus);
 }
 
+/* ---------- Conn params ---------- */
 static void on_conn_params_evt(ble_conn_params_evt_t * p_evt)
 {
     if (p_evt->evt_type == BLE_CONN_PARAMS_EVT_FAILED)
@@ -71,6 +125,7 @@ void conn_params_init(void)
     APP_ERROR_CHECK(err);
 }
 
+/* ---------- BLE events ---------- */
 static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 {
     ret_code_t err_code;
@@ -142,7 +197,7 @@ void ble_stack_init(void)
     NRF_SDH_BLE_OBSERVER(m_ble_obs, APP_BLE_OBSERVER_PRIO, ble_evt_handler, NULL);
 }
 
-
+/* ---------- GATT ---------- */
 static void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
 {
     if ((m_conn_handle == p_evt->conn_handle) &&
@@ -160,11 +215,12 @@ void gatt_init(void)
     nrf_ble_gatt_att_mtu_periph_set(&m_gatt, NRF_SDH_BLE_GATT_MAX_MTU_SIZE);
 }
 
-
+/* ---------- Advertising ---------- */
 static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
 {
     if (ble_adv_evt == BLE_ADV_EVT_IDLE)
     {
+        /* Restart advertising instead of sleeping — keeps ECG running */
         ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
     }
 }
@@ -191,22 +247,39 @@ void advertising_start(void)
     NRF_LOG_INFO("Advertising started");
 }
 
+/* ---------- Thin accessors over the BLE globals above (used by main loop / device_mode) ---------- */
+uint16_t ble_app_conn_handle(void)  { return m_conn_handle; }
+bool     ble_app_is_connected(void) { return m_conn_handle != BLE_CONN_HANDLE_INVALID; }
+bool     ble_app_ready_to_send(void) { return ble_app_is_connected() && m_mtu_negotiated; }
+
+void ble_app_get_addr(uint8_t addr[6])
+{
+    ble_gap_addr_t gap_addr;
+    sd_ble_gap_addr_get(&gap_addr);
+    memcpy(addr, gap_addr.addr, 6);
+}
+
+int8_t ble_app_get_rssi(void) { return (int8_t)m_rssi; }
+
+void ble_app_set_conn_interval(uint16_t min_ms, uint16_t max_ms)
+{
+    ble_gap_conn_params_t params = {
+        .min_conn_interval = MSEC_TO_UNITS(min_ms, UNIT_1_25_MS),
+        .max_conn_interval = MSEC_TO_UNITS(max_ms, UNIT_1_25_MS),
+        .slave_latency     = SLAVE_LATENCY,
+        .conn_sup_timeout  = CONN_SUP_TIMEOUT,
+    };
+    sd_ble_gap_ppcp_set(&params);
+    if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
+    {
+        sd_ble_gap_conn_param_update(m_conn_handle, &params);
+    }
+}
+
 uint32_t ble_app_send(uint8_t const *data, uint16_t len)
 {
     if (m_conn_handle == BLE_CONN_HANDLE_INVALID) { return NRF_ERROR_INVALID_STATE; }
     if (len > m_ble_max_data_len)                 { return NRF_ERROR_DATA_SIZE; }
     uint16_t l = len;
     return ble_cus_data_send(&m_cus, (uint8_t *)data, &l, m_conn_handle);
-}
-
-void ble_init()
-{
-		ble_stack_init();   
-    gap_params_init();
-    gatt_init();
-    services_init();
-    advertising_init();
-    conn_params_init();
-	
-		advertising_start();
 }

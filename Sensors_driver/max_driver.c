@@ -1,6 +1,7 @@
 #include "max_driver.h"
 #include "nrf_delay.h"
 
+
 void max30102_write(uint8_t register_address, uint8_t value)
 {
 	uint8_t tx_buff[2] = {register_address, value};
@@ -124,6 +125,22 @@ void max30102_get_sample(uint32_t *ir, uint32_t *red)
     *red = red_sample;
 }
 
-void ppg_process(uint32_t *ir_sample, uint32_t *red_sample, sensor_data_t *sensors)
+float filter_process(uint32_t sample)
 {
+	//iir filter
+	//adaptive filter
+	
+	//return processed sample
+	return (float) sample;
+}
+void ppg_process(rb_typedef_t *ir_buff, rb_typedef_t *red_buff, uint8_t *hr, uint8_t *spo2)
+{
+	//calculate hr 
+	
+	//peaks detect 
+	*hr = 100;
+	
+	//calculate spo2
+	//calculate R based on AC_red,AC_ir,DC_red,DC_ir
+	*spo2 = 99;
 }
