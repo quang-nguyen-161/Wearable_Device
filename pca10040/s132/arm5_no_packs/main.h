@@ -31,8 +31,8 @@ volatile bool ecg_ticks = false;
 volatile bool ble_ticks = false;
 volatile bool vital_ticks = false;
 volatile bool lcd_ticks = false;
-volatile int capture_counter = 0;
-
+volatile bool config_update_flag = false;
+volatile bool max_shutdown = false;
 
 typedef struct sensor_data {
     uint8_t  hr_ppg;     

@@ -16,6 +16,7 @@
 
 #include "ble_driver.h"
 #include "cus_service.h"
+#include "cmd.h"
 
 /* ------------------------------------------------------------------ */
 /*  BLE configuration                                                  */
@@ -83,11 +84,11 @@ void cus_data_handler(ble_cus_evt_t * p_evt)
     }
     else if (p_evt->type == BLE_CUS_EVT_RX_DATA)
     {
-			/*
+			
         cmd_rx_handle(p_evt->params.rx_data.p_data,
                       p_evt->params.rx_data.length,
                       PACKET_SAMPLES_MAX);
-			*/
+			
     }
 }
 

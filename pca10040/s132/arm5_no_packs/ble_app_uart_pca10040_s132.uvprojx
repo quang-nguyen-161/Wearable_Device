@@ -463,6 +463,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\Sensors_driver\ad8232_driver.c</FilePath>
             </File>
+            <File>
+              <FileName>cmd.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\Sensors_driver\cmd.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -4185,6 +4190,11 @@
               <FileName>ad8232_driver.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\Sensors_driver\ad8232_driver.c</FilePath>
+            </File>
+            <File>
+              <FileName>cmd.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\Sensors_driver\cmd.c</FilePath>
             </File>
           </Files>
         </Group>

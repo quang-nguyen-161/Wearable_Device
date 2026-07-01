@@ -114,4 +114,6 @@ void max30102_init();
 void max30102_get_sample(uint32_t *ir, uint32_t *red);
 float ppg_filter_process(uint32_t sample);
 void ppg_process(rb_typedef_t *ir_buff, rb_typedef_t *red_buff, uint8_t *hr, uint8_t *spo2);
+void max30102_shutdown(void);
+void max30102_wakeup(void);
 #endif

@@ -192,4 +192,3 @@ void flash_save_config(const config_t *dev_config)
     NRF_LOG_INFO("wdt_timeout   : %u", dev_config->wdt_timeout);
 		NRF_LOG_INFO("lcd_refresh   : %u", dev_config->lcd_refresh);
 }
-

@@ -9,8 +9,6 @@ void timer_compare_init(NRF_TIMER_Type* p_reg, timer_cb_t cb , uint32_t compare_
 {
 	timer_callback = cb;
 	
-	size_t number = 0;
-	
 	//disable timer before config
 	p_reg->TASKS_STOP = 1;
 	p_reg->TASKS_CLEAR = 1;
@@ -61,4 +59,38 @@ void TIMER3_IRQHandler(void)
         if (timer_callback)
             timer_callback();
     }
+}
+//1us based timer
+void timer_init_us(NRF_TIMER_Type *p_reg)
+{
+		//disable timer before config
+		p_reg->TASKS_STOP = 1;
+		p_reg->TASKS_CLEAR = 1;
+	
+		//set prescaler
+		p_reg->MODE = TIMER_MODE_MODE_Timer;
+		p_reg->BITMODE = TIMER_BITMODE_BITMODE_32Bit;
+		//f_timer = 16MHz/(2^PRESCALER), prescaler = 4 -> f_timer = 1MHz
+		p_reg->PRESCALER = 4; 
+}
+
+
+void timer_start(NRF_TIMER_Type *p_reg)
+{
+		p_reg->TASKS_START = 1;
+}
+void timer_stop(NRF_TIMER_Type *p_reg)
+{
+    p_reg->TASKS_STOP = 1;
+}
+
+void timer_clear(NRF_TIMER_Type *p_reg)
+{
+    p_reg->TASKS_CLEAR = 1;
+}
+
+uint32_t timer_now_us(NRF_TIMER_Type *p_reg)
+{
+    p_reg->TASKS_CAPTURE[0] = 1;
+    return p_reg->CC[0];
 }

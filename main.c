@@ -48,16 +48,24 @@ void adc_callback(int16_t sample)
 }
 
 void peripheral_init(config_t *dev_config)
-{
+{		
+		//twi0 use for max30102 & tmp117
     twim_init(NRF_TWIM0, TWI_SCL_PIN, TWI_SDA_PIN);
-
+		
+	  //spi1 use for gc9a01 lcd
     spim_init(NRF_SPIM1, SPI_SCL_PIN, SPI_SDA_PIN);
 
+		//saadc use for ad8232, timer2 use for capture
     saadc_init(adc_callback);
     ppi_init(NRF_TIMER2, dev_config->ecg_sample);
-
+		
+		//timer3 use for max30102 capture & based ticks
     timer_compare_init(NRF_TIMER3, sensor_callback, dev_config->ppg_sample);
-
+		
+		//timer4 use for time measurement 
+		timer_init_us(NRF_TIMER4);
+		timer_start(NRF_TIMER4);
+	
     wdt_init(dev_config->wdt_timeout);
 }
 
@@ -117,6 +125,9 @@ int main(void)
 				(dev_config.ble_send_time * 1000UL) / dev_config.ppg_sample;
 		uint32_t lcd_refresh_threshold = 
 				(dev_config.lcd_refresh * 1000UL) / dev_config.ppg_sample;
+		//tmp capture every 200ms
+		uint32_t tmp_capture_threshold = (200 * 1000UL) / dev_config.ppg_sample;
+		static uint32_t 			 tmp_capture_counter = 0;
 		static uint32_t 			 lcd_refresh_counter = 0;
 	  static uint32_t 			 ble_send_counter = 0;
     static uint32_t        phase_counter  = 0;
@@ -149,7 +160,12 @@ int main(void)
             if (sensor_ticks)
             {
                 sensor_ticks = false;
+							
+								//counter increment
 								ble_send_counter++;
+								tmp_capture_counter++;
+								lcd_refresh_counter++;
+							
 								//NRF_LOG_INFO("sensors ticks\n");
 								max30102_get_sample(&ir_sample,&red_sample);
 								float ir_filtered = ppg_filter_process(ir_sample);
@@ -159,7 +175,17 @@ int main(void)
 								rb_push(&rb_red, red_filtered);
 							
 								ppg_process(&rb_ir,&rb_red,&sensors.hr_ppg,&sensors.spo2);
-								sensors.temp = tmp117_get_temp();
+								
+								//get temp
+								if (tmp_capture_counter > tmp_capture_threshold)
+								{
+									tmp_capture_counter = 0;
+									
+									//tmp117 capture once then sleep
+									tmp117_wake_oneshot();
+									sensors.temp = tmp117_get_temp();
+									tmp117_shutdown_mode();
+								}
             }
 						// if ble send counter is full then send ble packers
 						if (ble_send_counter >= ble_send_threshold)
@@ -184,51 +210,75 @@ int main(void)
 				
 				//periodic mode
         if (dev_config.mode == MODE_PERIODIC)
-        {
+        {	
+						
+			
             if (sensor_ticks)
-            {
-                sensor_ticks = false;
-                phase_counter++;
+							{
+								sensor_ticks = false;
 								
-								max30102_get_sample(&ir_sample,&red_sample);
-								float ir_filtered = ppg_filter_process(ir_sample);
-								rb_push(&rb_ir, ir_filtered);
+								//counter increment								
+								phase_counter++;
+								
+								//entering capture phase
+								if (periodic_state == PERIODIC_CAPTURE)
+										{
+											//wakup max30102 after sleep phase
+											if (max_shutdown)
+												{
+													max30102_wakeup();
+													max_shutdown = false;
+												}
+											//tmp117 capture increment
+											tmp_capture_counter++;
+											//max30102 pipeline
+											max30102_get_sample(&ir_sample, &red_sample);
+											float ir_filtered = ppg_filter_process(ir_sample);
+											rb_push(&rb_ir, ir_filtered);
+
+											float red_filtered = ppg_filter_process(red_sample);
+											rb_push(&rb_red, red_filtered);
+
+											ppg_process(&rb_ir, &rb_red, &sensors.hr_ppg, &sensors.spo2);
 							
-								float red_filtered = ppg_filter_process(red_sample);
-								rb_push(&rb_red, red_filtered);
+											//tmp117 get temp
+											if (tmp_capture_counter > tmp_capture_threshold)
+											{
+												tmp_capture_counter = 0;
+												tmp117_wake_oneshot();
+												sensors.temp = tmp117_get_temp();
+												tmp117_shutdown_mode();
+											}
 							
-								ppg_process(&rb_ir,&rb_red,&sensors.hr_ppg,&sensors.spo2);
-								sensors.temp = tmp117_get_temp();
-							
-								//capture phase
-                if (periodic_state == PERIODIC_CAPTURE)
-                {
-										//entering sleep phase
-                    if (phase_counter >= capture_threshold)
-                    {
-                        phase_counter  = 0;
-                        periodic_state = PERIODIC_IDLE;
+											//end of capture phase
+											if (phase_counter >= capture_threshold)
+											{
+												phase_counter = 0;
+												periodic_state = PERIODIC_IDLE;
+												//send data before sleep
 												if (ble_app_ready_to_send())
-                    {
-                        send_vitals_values(sensors);
-                    }
-                        ppi_disable();
-                        saadc_disable();
-                    }
-                }
-								//sleep phase
-                else
-                {
-									  //entering capture phase
-                    if (phase_counter >= periodic_threshold)
-                    {
-                        phase_counter  = 0;
-                        periodic_state = PERIODIC_CAPTURE;
-                        ppi_enable();
-                        saadc_enable();
-                    }
-                }
-            }
+												{
+													send_vitals_values(sensors);
+												}
+											//disable sensors
+											ppi_disable();
+											saadc_disable();
+											max30102_shutdown();
+											max_shutdown = true;
+											}			
+										}
+    else
+										{
+											//end of sleep phase
+											if (phase_counter >= periodic_threshold)
+											{
+													phase_counter = 0;
+													periodic_state = PERIODIC_CAPTURE;
+													ppi_enable();
+													saadc_enable();
+											}
+										}
+							}
 						//ecg only sample in capture phase
             if (periodic_state == PERIODIC_CAPTURE && ecg_ticks)
             {
@@ -245,4 +295,12 @@ int main(void)
             idle_state_handle();
         }
     }
+		
+		//mode change via BLE
+		if (config_update_flag)
+		{
+		//parse ble packet
+    flash_save_config(&dev_config);
+    config_update_flag = false;   
+}
 }

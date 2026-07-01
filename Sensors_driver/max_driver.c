@@ -81,6 +81,24 @@ void max30102_set_led_pulse_width(max30102_led_pw_t pw)
 	max30102_write(MAX30102_SPO2_CONFIG, config);
 }
 
+void max30102_shutdown(void)
+{
+    max30102_write(MAX30102_MODE_CONFIG,   0x80 | 0x03);
+    max30102_write(MAX30102_LED_IR_PA1, 0);
+    max30102_write(MAX30102_LED_RED_PA2, 0);
+}
+
+void max30102_wakeup(void)
+{
+    max30102_write(MAX30102_MODE_CONFIG, 0x03);
+    nrf_delay_ms(10);
+    max30102_write(MAX30102_FIFO_WR_PTR, 0x00);
+    max30102_write(MAX30102_FIFO_RD_PTR,  0x00);
+    max30102_write(MAX30102_OVF_COUNTER,  0x00);
+
+    max30102_set_led_current_1(6);
+    max30102_set_led_current_2(6);
+}
 
 void max30102_init()
 {
@@ -144,3 +162,5 @@ void ppg_process(rb_typedef_t *ir_buff, rb_typedef_t *red_buff, uint8_t *hr, uin
 	//calculate R based on AC_red,AC_ir,DC_red,DC_ir
 	*spo2 = 99;
 }
+
+
