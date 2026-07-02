@@ -1,5 +1,5 @@
 
-nRF52832 wearable devices using low level registers
+# nRF52832 wearable devices using low level registers
 
 Follow nRF52 Product Specifications at https://docs.nordicsemi.com/r/bundle/ps_nrf52832/page/nrf52832_ps.html
 
@@ -9,7 +9,7 @@ Use Registers typedef, enum & defines at:
 
 ## Peripherals & Sensors
 
-Used Peripherals:
+#### Used Peripherals:
 + TWI (I2C) Master: TWI as Master using easyDMA
 + SPI Master: SPI as Master using easyDMA
 + Timer: configure timer as compare mode for ticks
@@ -17,7 +17,7 @@ Used Peripherals:
 + WDT: Watch-dog timer
 + SAADC: Successive approximation analog-to-digital using easyDMA
 + PPI: Programmable peripheral interconnect, connect events & tasks of different peripherals without using CPU
-Sensors & LCD:
+#### Sensors & LCD:
 + MAX30102: I2C, use for hr & spo2
 + TMP117: I2C, use for temperature
 + AD8232: analog output, use for ECG hr
@@ -31,7 +31,7 @@ Sensors & LCD:
 <img width="2656" height="1602" alt="sodothietbi" src="https://github.com/user-attachments/assets/4862195d-d8f4-4eff-b814-20ae2fa806d3" />
 
 
-   sơ đồ khối của thiết bị và các cảm biến sử dụng
+   #### Sơ đồ khối của thiết bị và các cảm biến sử dụng 
 
 ## Chế độ liên tục
 
