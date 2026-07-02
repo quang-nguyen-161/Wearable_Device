@@ -15,7 +15,8 @@ Used Peripherals:
 + Timer: configure timer as compare mode for ticks
 + NVMC: Non-volatile memory controller for flash storage without using existed FDS layer
 + WDT: Watch-dog timer
-
++ SAADC: Successive approximation analog-to-digital using easyDMA
++ PPI: Programmable peripheral interconnect, connect events & tasks of different peripherals without using CPU
 Sensors & LCD:
 + MAX30102: I2C, use for hr & spo2
 + TMP117: I2C, use for temperature
@@ -27,7 +28,8 @@ Sensors & LCD:
 
 ## Sơ đồ khối
 
-<img width="538" height="330" alt="Screenshot 2026-06-30 190000" src="https://github.com/user-attachments/assets/ca77f8e3-b8c2-4ddb-a254-2d48101fca27" />
+<img width="2656" height="1602" alt="sodothietbi" src="https://github.com/user-attachments/assets/4862195d-d8f4-4eff-b814-20ae2fa806d3" />
+
 
    sơ đồ khối của thiết bị và các cảm biến sử dụng
 
@@ -48,7 +50,7 @@ Sensors & LCD:
 
 ## Chế độ đo ECG
 
-<img width="2229" height="1494" alt="ecg_mode drawio" src="https://github.com/user-attachments/assets/d9869bc1-c198-449b-a401-f721705bfe74" />
+<img width="1486" height="996" alt="ecg_mode" src="https://github.com/user-attachments/assets/83c2f8f7-68b9-40d1-aa1e-4ab717bca2b4" />
 
 - Chế độ đo ECG, hoạt động riêng biệt & song song với 2 chế độ trên, chu kỳ lấy mẫu dựa trên ecg_ticks, mỗi ticks 4ms ~ 250Hz.
 - Hoạt động liên tục trong chế độ liên tục và chỉ hoạt động ở pha thu thập dữ liệu trong chế độ đo theo chu kỳ.
